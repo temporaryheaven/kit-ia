@@ -3717,6 +3717,9 @@ Devuelve ÚNICAMENTE el bloque JSON.`;
                                 <button onclick="duplicatePromptInBank('${item.id}')" title="Duplicar prompt" class="text-xs bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white p-2 rounded-xl border border-slate-800 transition">
                                     <i class="fa-regular fa-clone"></i>
                                 </button>
+                                <button onclick="exportSinglePromptToMarkdown('${item.id}')" title="Descargar este prompt en archivo Markdown (.md)" class="text-xs bg-slate-900 hover:bg-slate-800 text-purple-400 hover:text-purple-300 p-2 rounded-xl border border-purple-500/30 transition active:scale-95">
+                                    <i class="fa-brands fa-markdown"></i>
+                                </button>
                                 <button onclick="openSavePromptModal('${item.id}')" title="Editar metadatos / título" class="text-xs bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white p-2 rounded-xl border border-slate-800 transition">
                                     <i class="fa-regular fa-pen-to-square"></i>
                                 </button>
@@ -3872,6 +3875,198 @@ ${item.iter || '[Prompt de 2ª iteración / Reprompting]'}`;
 
             showToast("Backup Descargado", `Exportados ${prompts.length} prompts a archivo .json.`, "download");
         }
+
+        // EXPORT PROMPT BANK TO MARKDOWN (.MD)
+        function exportPromptBankToMarkdown() {
+            const prompts = getSavedPrompts();
+            if (prompts.length === 0) {
+                showToast("Banco Vacío", "No tienes prompts guardados para exportar.", "trash");
+                return;
+            }
+
+            const now = new Date();
+            const dateFormatted = now.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+            const dateSuffix = now.toISOString().split('T')[0];
+
+            let md = `# 📚 Banco de Prompts TCREI - Kit de IA para Docentes de FP\n\n`;
+            md += `> **Fecha de Exportación:** ${dateFormatted}  \n`;
+            md += `> **Total de Prompts:** ${prompts.length}  \n`;
+            md += `> **Marco Metodológico:** TCREI (Tarea y Rol • Contexto • Referencias • Evaluar • Iterar)\n\n`;
+            md += `---\n\n`;
+
+            prompts.forEach((p, idx) => {
+                const title = p.title || `Prompt ${idx + 1}`;
+                const fam = p.familyName ? `${p.familyCode || 'GEN'} - ${p.familyName}` : (p.familyCode || 'General');
+                const tags = (p.tags && p.tags.length > 0) ? p.tags.map(t => `\`#${t}\``).join(' ') : '_Sin etiquetas_';
+                const dateP = p.updatedAt ? new Date(p.updatedAt).toLocaleDateString('es-ES') : '-';
+
+                md += `## ${idx + 1}. ${title}\n\n`;
+                md += `- **Familia Profesional:** ${fam}\n`;
+                md += `- **Etiquetas:** ${tags}\n`;
+                md += `- **Última Actualización:** ${dateP}\n\n`;
+
+                md += `### 📥 Fase 1: Prompt de Entrada Estructurado (T-C-R)\n\n`;
+                md += `\`\`\`text\n`;
+                md += `[TAREA & ROL]:\n${p.task || 'No especificado'}\n\n`;
+                md += `[CONTEXTO DE AULA / TALLER]:\n${p.context || 'No especificado'}\n\n`;
+                md += `[REFERENCIAS & NORMATIVA]:\n${p.ref || 'No especificado'}\n`;
+                md += `\`\`\`\n\n`;
+
+                md += `### 🔄 Fase 2: Control Crítico e Iteración (E-I)\n\n`;
+                md += `- **🎯 Auditoría Docente (Evaluar - E):**\n  ${p.eval || '_No especificado_'}\n\n`;
+                md += `- **🔁 Reprompting / Prueba de Esfuerzo (Iterar - I):**\n  > ${p.iter || '_No especificado_'}\n\n`;
+
+                if (p.notes && p.notes.trim()) {
+                    md += `💡 **Observaciones Pedagógicas:**\n> ${p.notes}\n\n`;
+                }
+
+                md += `---\n\n`;
+            });
+
+            const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `Kit_IA_Docentes_Banco_Prompts_${dateSuffix}.md`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
+
+            showToast("Exportado a Markdown", `Exportados ${prompts.length} prompts a archivo .md.`, "download");
+        }
+
+        // EXPORT SINGLE PROMPT TO MARKDOWN (.MD)
+        function exportSinglePromptToMarkdown(id) {
+            const list = getSavedPrompts();
+            const p = list.find(item => item.id === id);
+            if (!p) return;
+
+            const now = new Date();
+            const dateFormatted = now.toLocaleDateString('es-ES');
+            const safeTitle = (p.title || 'Prompt_TCREI').replace(/[/\\?%*:|"<>]/g, '-').replace(/\s+/g, '_');
+            const fam = p.familyName ? `${p.familyCode || 'GEN'} - ${p.familyName}` : (p.familyCode || 'General');
+            const tags = (p.tags && p.tags.length > 0) ? p.tags.map(t => `\`#${t}\``).join(' ') : '_Sin etiquetas_';
+
+            let md = `# ${p.title || 'Prompt TCREI'}\n\n`;
+            md += `> **Familia Profesional:** ${fam}  \n`;
+            md += `> **Etiquetas:** ${tags}  \n`;
+            md += `> **Fecha:** ${dateFormatted}  \n`;
+            md += `> **Marco Metodológico:** TCREI (Docencia FP)\n\n`;
+            md += `---\n\n`;
+
+            md += `## 📥 Fase 1: Prompt de Entrada Estructurado (T-C-R)\n\n`;
+            md += `\`\`\`text\n`;
+            md += `[TAREA & ROL]:\n${p.task || 'No especificado'}\n\n`;
+            md += `[CONTEXTO DE AULA / TALLER]:\n${p.context || 'No especificado'}\n\n`;
+            md += `[REFERENCIAS & NORMATIVA]:\n${p.ref || 'No especificado'}\n`;
+            md += `\`\`\`\n\n`;
+
+            md += `## 🔄 Fase 2: Control Crítico e Iteración (E-I)\n\n`;
+            md += `- **🎯 Criterios de Evaluación Docente (E):**\n  ${p.eval || '_No especificado_'}\n\n`;
+            md += `- **🔁 Estrategia de Reprompting / Iteración (I):**\n  > ${p.iter || '_No especificado_'}\n\n`;
+
+            if (p.notes && p.notes.trim()) {
+                md += `💡 **Observaciones Pedagógicas:**\n> ${p.notes}\n\n`;
+            }
+
+            const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${safeTitle}.md`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
+
+            showToast("Prompt Descargado", `"${p.title}" exportado como Markdown.`, "download");
+        }
+
+        // EXPORT PROMPT BANK TO PLAIN TEXT (.TXT)
+        function exportPromptBankToTxt() {
+            const prompts = getSavedPrompts();
+            if (prompts.length === 0) {
+                showToast("Banco Vacío", "No tienes prompts guardados para exportar.", "trash");
+                return;
+            }
+
+            const now = new Date();
+            const dateFormatted = now.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+            const dateSuffix = now.toISOString().split('T')[0];
+
+            let txt = `======================================================================\n`;
+            txt += `BANCO DE PROMPTS TCREI - KIT DE IA PARA DOCENTES DE FP\n`;
+            txt += `======================================================================\n`;
+            txt += `Fecha de Exportación: ${dateFormatted}\n`;
+            txt += `Total de Prompts: ${prompts.length}\n`;
+            txt += `Marco Metodológico: TCREI (Tarea y Rol • Contexto • Referencias • Evaluar • Iterar)\n`;
+            txt += `======================================================================\n\n`;
+
+            prompts.forEach((p, idx) => {
+                const title = p.title || `Prompt ${idx + 1}`;
+                const fam = p.familyName ? `${p.familyCode || 'GEN'} - ${p.familyName}` : (p.familyCode || 'General');
+                const tags = (p.tags && p.tags.length > 0) ? p.tags.join(', ') : 'Sin etiquetas';
+                const dateP = p.updatedAt ? new Date(p.updatedAt).toLocaleDateString('es-ES') : '-';
+
+                txt += `----------------------------------------------------------------------\n`;
+                txt += `PROMPT ${idx + 1}: ${title.toUpperCase()}\n`;
+                txt += `----------------------------------------------------------------------\n`;
+                txt += `Familia Profesional: ${fam}\n`;
+                txt += `Etiquetas: ${tags}\n`;
+                txt += `Última Actualización: ${dateP}\n\n`;
+
+                txt += `[FASE 1: PROMPT DE ENTRADA ESTRUCTURADO (T-C-R)]\n`;
+                txt += `* Tarea & Rol (T):\n  ${(p.task || 'No especificado').replace(/\n/g, '\n  ')}\n\n`;
+                txt += `* Contexto de Aula / Taller (C):\n  ${(p.context || 'No especificado').replace(/\n/g, '\n  ')}\n\n`;
+                txt += `* Referencias & Normativa (R):\n  ${(p.ref || 'No especificado').replace(/\n/g, '\n  ')}\n\n`;
+
+                txt += `[FASE 2: CONTROL CRÍTICO E ITERACIÓN (E-I)]\n`;
+                txt += `* Auditoría Docente (Evaluar - E):\n  ${(p.eval || 'No especificado').replace(/\n/g, '\n  ')}\n\n`;
+                txt += `* Reprompting / Prueba de Esfuerzo (Iterar - I):\n  ${(p.iter || 'No especificado').replace(/\n/g, '\n  ')}\n\n`;
+
+                if (p.notes && p.notes.trim()) {
+                    txt += `* Observaciones Pedagógicas:\n  ${p.notes.replace(/\n/g, '\n  ')}\n\n`;
+                }
+
+                txt += `\n`;
+            });
+
+            const blob = new Blob([txt], { type: 'text/plain;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `Kit_IA_Docentes_Banco_Prompts_${dateSuffix}.txt`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
+
+            showToast("Exportado a Texto", `Exportados ${prompts.length} prompts a archivo .txt.`, "download");
+        }
+
+        // DROPDOWN EXPORT CONTROLLER
+        function toggleExportDropdown(e) {
+            if (e) e.stopPropagation();
+            const menu = document.getElementById('export-dropdown-menu');
+            if (menu) {
+                menu.classList.toggle('hidden');
+            }
+        }
+
+        function closeExportDropdown() {
+            const menu = document.getElementById('export-dropdown-menu');
+            if (menu && !menu.classList.contains('hidden')) {
+                menu.classList.add('hidden');
+            }
+        }
+
+        document.addEventListener('click', function (event) {
+            const wrapper = document.getElementById('export-dropdown-wrapper');
+            if (wrapper && !wrapper.contains(event.target)) {
+                closeExportDropdown();
+            }
+        });
 
         function triggerLocalRestore() {
             const fileInput = document.getElementById('local-restore-file-input');
@@ -4499,11 +4694,43 @@ ${item.iter || '[Prompt de 2ª iteración / Reprompting]'}`;
 
                 <!-- BACKUP & SYNC ACTION BUTTONS -->
                 <div class="flex flex-wrap items-center gap-2 shrink-0">
-                    <button onclick="exportPromptBankToJson()" title="Exportar archivo de backup JSON a tu dispositivo"
-                        class="text-xs bg-slate-900 hover:bg-slate-800 text-slate-200 hover:text-white px-3 py-2 rounded-xl border border-slate-700 transition flex items-center gap-1.5 active:scale-95">
-                        <i class="fa-solid fa-download text-sky-400"></i>
-                        <span>Exportar JSON</span>
-                    </button>
+                    <!-- EXPORT DROPDOWN (JSON / MARKDOWN / TEXTO PLANO) -->
+                    <div class="relative inline-block text-left" id="export-dropdown-wrapper">
+                        <button onclick="toggleExportDropdown(event)" id="export-dropdown-btn" title="Exportar banco de prompts en diferentes formatos"
+                            class="text-xs bg-slate-900 hover:bg-slate-800 text-sky-300 hover:text-white px-3 py-2 rounded-xl border border-slate-700 transition flex items-center gap-1.5 active:scale-95">
+                            <i class="fa-solid fa-download text-sky-400"></i>
+                            <span>Exportar</span>
+                            <i class="fa-solid fa-chevron-down text-[9px] text-slate-400 ml-0.5"></i>
+                        </button>
+                        <div id="export-dropdown-menu"
+                            class="hidden absolute left-0 sm:right-0 sm:left-auto mt-1.5 w-52 rounded-2xl bg-slate-900/95 border border-slate-700 shadow-2xl backdrop-blur-xl p-1.5 z-40 space-y-1">
+                            <button onclick="exportPromptBankToJson(); closeExportDropdown();"
+                                class="w-full text-left px-3 py-2 text-xs text-slate-200 hover:text-white hover:bg-slate-800/80 rounded-xl transition flex items-center gap-2">
+                                <i class="fa-solid fa-file-code text-sky-400 w-4 text-center"></i>
+                                <div>
+                                    <strong class="block text-white">JSON (.json)</strong>
+                                    <span class="text-[10px] text-slate-400">Backup reutilizable</span>
+                                </div>
+                            </button>
+                            <button onclick="exportPromptBankToMarkdown(); closeExportDropdown();"
+                                class="w-full text-left px-3 py-2 text-xs text-slate-200 hover:text-white hover:bg-slate-800/80 rounded-xl transition flex items-center gap-2">
+                                <i class="fa-brands fa-markdown text-purple-400 w-4 text-center"></i>
+                                <div>
+                                    <strong class="block text-white">Markdown (.md)</strong>
+                                    <span class="text-[10px] text-slate-400">Documento maquetado</span>
+                                </div>
+                            </button>
+                            <button onclick="exportPromptBankToTxt(); closeExportDropdown();"
+                                class="w-full text-left px-3 py-2 text-xs text-slate-200 hover:text-white hover:bg-slate-800/80 rounded-xl transition flex items-center gap-2">
+                                <i class="fa-regular fa-file-lines text-emerald-400 w-4 text-center"></i>
+                                <div>
+                                    <strong class="block text-white">Texto Plano (.txt)</strong>
+                                    <span class="text-[10px] text-slate-400">Texto estándar editable</span>
+                                </div>
+                            </button>
+                        </div>
+                    </div>
+
                     <button onclick="triggerLocalRestore()" title="Restaurar banco desde un archivo JSON"
                         class="text-xs bg-slate-900 hover:bg-slate-800 text-slate-200 hover:text-white px-3 py-2 rounded-xl border border-slate-700 transition flex items-center gap-1.5 active:scale-95">
                         <i class="fa-solid fa-file-import text-amber-400"></i>

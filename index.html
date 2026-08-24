@@ -192,7 +192,7 @@
     <!-- TOAST NOTIFICATION CONTAINER (Fixed Bottom-Right)                -->
     <!-- ================================================================= -->
     <div id="toast"
-        class="fixed bottom-6 right-6 z-50 transform translate-y-20 opacity-0 pointer-events-none transition-all duration-300 flex items-center gap-3 bg-slate-900/95 text-white px-5 py-3.5 rounded-2xl border border-brand-500/40 shadow-2xl shadow-brand-500/20 backdrop-blur-xl">
+        class="fixed bottom-6 right-6 z-[100] transform translate-y-20 opacity-0 pointer-events-none transition-all duration-300 flex items-center gap-3 bg-slate-900/95 text-white px-5 py-3.5 rounded-2xl border border-brand-500/40 shadow-2xl shadow-brand-500/20 backdrop-blur-xl">
         <div id="toast-icon"
             class="w-8 h-8 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
             <i class="fa-solid fa-check"></i>
@@ -3979,23 +3979,33 @@ ${item.iter || '[Prompt de 2ª iteración / Reprompting]'}`;
                 return;
             }
 
-            gdriveTokenClient = google.accounts.oauth2.initTokenClient({
-                client_id: GDRIVE_CLIENT_ID,
-                scope: GDRIVE_SCOPE,
-                callback: (tokenResponse) => {
-                    if (tokenResponse.error !== undefined) {
-                        console.error("Google Auth Error:", tokenResponse);
-                        showToast("Error de Autorización", tokenResponse.error_description || tokenResponse.error, "trash");
-                        return;
+            try {
+                gdriveTokenClient = google.accounts.oauth2.initTokenClient({
+                    client_id: GDRIVE_CLIENT_ID,
+                    scope: GDRIVE_SCOPE,
+                    callback: (tokenResponse) => {
+                        if (tokenResponse.error !== undefined) {
+                            console.error("Google Auth Error:", tokenResponse);
+                            if (tokenResponse.error === 'interaction_required' || tokenResponse.error === 'consent_required') {
+                                gdriveTokenClient.requestAccessToken({ prompt: 'consent' });
+                                return;
+                            }
+                            gdriveAccessToken = null;
+                            showToast("Error de Autorización", tokenResponse.error_description || tokenResponse.error, "trash");
+                            return;
+                        }
+                        gdriveAccessToken = tokenResponse.access_token;
+                        if (typeof callback === 'function') {
+                            callback(gdriveAccessToken);
+                        }
                     }
-                    gdriveAccessToken = tokenResponse.access_token;
-                    if (typeof callback === 'function') {
-                        callback(gdriveAccessToken);
-                    }
-                }
-            });
+                });
 
-            gdriveTokenClient.requestAccessToken({ prompt: gdriveAccessToken ? '' : 'consent' });
+                gdriveTokenClient.requestAccessToken({ prompt: gdriveAccessToken ? '' : 'select_account' });
+            } catch (err) {
+                console.error("Google Auth Init Error:", err);
+                showToast("Error de Google Auth", err.message || "No se pudo iniciar la autenticación.", "trash");
+            }
         }
 
         // BACKUP TO GOOGLE DRIVE (OPTION A: SINGLE SYNCED FILE)
@@ -4007,7 +4017,7 @@ ${item.iter || '[Prompt de 2ª iteración / Reprompting]'}`;
             }
 
             requestGoogleDriveAuth(async (token) => {
-                showToast("Sincronizando...", "Subiendo banco de prompts a Google Drive...", "bolt");
+                showToast("Sincronizando...", "Conectando con Google Drive...", "bolt");
                 try {
                     const payload = {
                         app: "Kit_IA_Docentes_TCREI",
@@ -4018,44 +4028,62 @@ ${item.iter || '[Prompt de 2ª iteración / Reprompting]'}`;
                     };
                     const jsonContent = JSON.stringify(payload, null, 2);
 
-                    // 1. Search if file already exists
-                    const searchRes = await fetch(`https://www.googleapis.com/drive/v3/files?q=name='${GDRIVE_BACKUP_FILENAME}' and trashed=false&fields=files(id,name)`, {
+                    // 1. Search if backup file exists in Drive
+                    const searchRes = await fetch(`https://www.googleapis.com/drive/v3/files?q=name='${GDRIVE_BACKUP_FILENAME}' and trashed=false&fields=files(id,name,modifiedTime)&spaces=drive`, {
                         headers: { 'Authorization': `Bearer ${token}` }
                     });
+
+                    if (!searchRes.ok) {
+                        if (searchRes.status === 401) {
+                            gdriveAccessToken = null;
+                            throw new Error("Sesión de Google expirada. Vuelve a pulsar el botón para autorizar.");
+                        }
+                        const errJson = await searchRes.json().catch(() => ({}));
+                        throw new Error(errJson.error?.message || `Error al consultar Drive (${searchRes.status})`);
+                    }
+
                     const searchData = await searchRes.json();
+                    let fileUpdated = false;
 
+                    // 2. If file found, try updating its content via PATCH
                     if (searchData.files && searchData.files.length > 0) {
-                        // File exists -> PATCH update content
                         const fileId = searchData.files[0].id;
-                        const updateRes = await fetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, {
-                            method: 'PATCH',
-                            headers: {
-                                'Authorization': `Bearer ${token}`,
-                                'Content-Type': 'application/json'
-                            },
-                            body: jsonContent
-                        });
+                        try {
+                            const updateRes = await fetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, {
+                                method: 'PATCH',
+                                headers: {
+                                    'Authorization': `Bearer ${token}`,
+                                    'Content-Type': 'application/json; charset=UTF-8'
+                                },
+                                body: jsonContent
+                            });
 
-                        if (!updateRes.ok) throw new Error("Fallo al actualizar el archivo en Drive.");
-                        showToast("¡Backup Sincronizado!", `Archivo ${GDRIVE_BACKUP_FILENAME} actualizado en tu Drive (${prompts.length} prompts).`, "check");
-                    } else {
-                        // File doesn't exist -> Create multipart
+                            if (updateRes.ok) {
+                                fileUpdated = true;
+                                showToast("¡Backup Sincronizado!", `Archivo ${GDRIVE_BACKUP_FILENAME} actualizado en tu Drive (${prompts.length} prompts).`, "check");
+                            } else {
+                                console.warn("PATCH failed, status:", updateRes.status, "- procediendo a crear archivo nuevo.");
+                            }
+                        } catch (patchErr) {
+                            console.warn("PATCH error:", patchErr);
+                        }
+                    }
+
+                    // 3. If file didn't exist or PATCH couldn't overwrite it, create it via standard multipart POST
+                    if (!fileUpdated) {
                         const metadata = {
                             name: GDRIVE_BACKUP_FILENAME,
                             mimeType: 'application/json'
                         };
-                        const boundary = '-------314159265358979323846';
-                        const delimiter = `\r\n--${boundary}\r\n`;
-                        const close_delim = `\r\n--${boundary}--`;
-
+                        const boundary = 'tcrei_backup_boundary_' + Date.now();
                         const multipartRequestBody =
-                            delimiter +
+                            `--${boundary}\r\n` +
                             'Content-Type: application/json; charset=UTF-8\r\n\r\n' +
                             JSON.stringify(metadata) +
-                            delimiter +
-                            'Content-Type: application/json\r\n\r\n' +
+                            `\r\n--${boundary}\r\n` +
+                            'Content-Type: application/json; charset=UTF-8\r\n\r\n' +
                             jsonContent +
-                            close_delim;
+                            `\r\n--${boundary}--`;
 
                         const createRes = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
                             method: 'POST',
@@ -4066,12 +4094,19 @@ ${item.iter || '[Prompt de 2ª iteración / Reprompting]'}`;
                             body: multipartRequestBody
                         });
 
-                        if (!createRes.ok) throw new Error("Fallo al crear el archivo en Drive.");
+                        if (!createRes.ok) {
+                            if (createRes.status === 401) {
+                                gdriveAccessToken = null;
+                                throw new Error("Sesión de Google expirada. Vuelve a pulsar el botón para autorizar.");
+                            }
+                            const errJson = await createRes.json().catch(() => ({}));
+                            throw new Error(errJson.error?.message || `Error al crear archivo en Drive (${createRes.status})`);
+                        }
                         showToast("¡Backup Creado en Drive!", `Guardado como ${GDRIVE_BACKUP_FILENAME} (${prompts.length} prompts).`, "check");
                     }
                 } catch (err) {
-                    console.error("Google Drive Upload Error:", err);
-                    showToast("Error de Sincronización", err.message || "Error conectando con Google Drive", "trash");
+                    console.error("Google Drive Backup Error:", err);
+                    showToast("Error en Google Drive", err.message || "Error al sincronizar con Google Drive.", "trash");
                 }
             });
         }
@@ -4081,9 +4116,19 @@ ${item.iter || '[Prompt de 2ª iteración / Reprompting]'}`;
             requestGoogleDriveAuth(async (token) => {
                 showToast("Buscando en Drive...", `Consultando ${GDRIVE_BACKUP_FILENAME}...`, "bolt");
                 try {
-                    const searchRes = await fetch(`https://www.googleapis.com/drive/v3/files?q=name='${GDRIVE_BACKUP_FILENAME}' and trashed=false&fields=files(id,name,modifiedTime,size)`, {
+                    const searchRes = await fetch(`https://www.googleapis.com/drive/v3/files?q=name='${GDRIVE_BACKUP_FILENAME}' and trashed=false&fields=files(id,name,modifiedTime,size)&orderBy=modifiedTime desc&spaces=drive`, {
                         headers: { 'Authorization': `Bearer ${token}` }
                     });
+
+                    if (!searchRes.ok) {
+                        if (searchRes.status === 401) {
+                            gdriveAccessToken = null;
+                            throw new Error("Sesión de Google expirada. Vuelve a pulsar el botón para autorizar.");
+                        }
+                        const errJson = await searchRes.json().catch(() => ({}));
+                        throw new Error(errJson.error?.message || `Error al consultar Drive (${searchRes.status})`);
+                    }
+
                     const searchData = await searchRes.json();
 
                     if (!searchData.files || searchData.files.length === 0) {
@@ -4096,7 +4141,15 @@ ${item.iter || '[Prompt de 2ª iteración / Reprompting]'}`;
                         headers: { 'Authorization': `Bearer ${token}` }
                     });
 
-                    if (!contentRes.ok) throw new Error("No se pudo descargar el archivo de backup.");
+                    if (!contentRes.ok) {
+                        if (contentRes.status === 401) {
+                            gdriveAccessToken = null;
+                            throw new Error("Sesión de Google expirada. Vuelve a pulsar el botón para autorizar.");
+                        }
+                        const errJson = await contentRes.json().catch(() => ({}));
+                        throw new Error(errJson.error?.message || "No se pudo descargar el archivo de backup.");
+                    }
+
                     const parsedPayload = await contentRes.json();
 
                     if (!parsedPayload.prompts || !Array.isArray(parsedPayload.prompts)) {

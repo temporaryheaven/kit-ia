@@ -3231,6 +3231,9 @@ Devuelve ÚNICAMENTE el bloque JSON.`;
         function loadPreset(presetKey) {
             aiAuditResults.phase1 = null;
             aiAuditResults.phase2 = null;
+            currentWorkingPromptId = null;
+            currentWorkingVersionId = null;
+            currentGeneratorFamily = presetKey;
             const p = PRESETS[presetKey];
             if (!p) return;
 
@@ -3247,6 +3250,9 @@ Devuelve ÚNICAMENTE el bloque JSON.`;
         function resetGeneratorForm() {
             aiAuditResults.phase1 = null;
             aiAuditResults.phase2 = null;
+            currentWorkingPromptId = null;
+            currentWorkingVersionId = null;
+            currentGeneratorFamily = 'GEN';
             document.getElementById('gen-task').value = '';
             document.getElementById('gen-context').value = '';
             document.getElementById('gen-ref').value = '';
@@ -3257,6 +3263,7 @@ Devuelve ÚNICAMENTE el bloque JSON.`;
         }
 
         function loadTemplateToGenerator(presetKey) {
+            currentGeneratorFamily = presetKey;
             loadPreset(presetKey);
             switchTab('generator');
         }
@@ -3410,7 +3417,7 @@ Devuelve ÚNICAMENTE el bloque JSON.`;
         });
 
         // =============================================================
-        // 13. PROMPT BANK PERSISTENCE & LOCAL STORAGE ENGINE
+        // 13. PROMPT BANK PERSISTENCE & LOCAL STORAGE ENGINE (VERSIONED)
         // =============================================================
         const STORAGE_KEY_PROMPTS = 'tcrei_custom_prompts';
         // Configuración estática de Google Drive OAuth 2.0 (Client ID de la aplicación)
@@ -3422,11 +3429,98 @@ Devuelve ÚNICAMENTE el bloque JSON.`;
         let gdriveAccessToken = null;
         let pendingRestorePayload = null;
         let editingPromptId = null;
+        let currentWorkingPromptId = null;
+        let currentWorkingVersionId = null;
+        let bankCardSelectedVersion = {};
+        let editingHistoryPromptId = null;
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        function getActiveVersion(prompt) {
+            if (!prompt || !prompt.versions || !prompt.versions.length) {
+                return {
+                    versionId: 'v_default',
+                    versionNumber: 1,
+                    versionComment: 'Versión inicial',
+                    task: prompt?.task || '',
+                    context: prompt?.context || '',
+                    ref: prompt?.ref || '',
+                    eval: prompt?.eval || '',
+                    iter: prompt?.iter || '',
+                    createdAt: prompt?.createdAt || new Date().toISOString()
+                };
+            }
+            const active = prompt.versions.find(v => v.versionId === prompt.activeVersionId);
+            return active || prompt.versions[prompt.versions.length - 1];
+        }
+
+        function getVersion(prompt, versionId) {
+            if (!prompt || !prompt.versions || !prompt.versions.length) {
+                return getActiveVersion(prompt);
+            }
+            if (!versionId) return getActiveVersion(prompt);
+            const found = prompt.versions.find(v => v.versionId === versionId);
+            return found || getActiveVersion(prompt);
+        }
 
         function getSavedPrompts() {
             try {
                 const data = localStorage.getItem(STORAGE_KEY_PROMPTS);
-                return data ? JSON.parse(data) : [];
+                if (!data) return [];
+                let list = JSON.parse(data);
+                if (!Array.isArray(list)) return [];
+
+                let modified = false;
+                list = list.map(item => {
+                    if (!item || typeof item !== 'object') return null;
+
+                    // Migración automática si el prompt no cuenta con estructura de versiones
+                    if (!item.versions || !Array.isArray(item.versions) || item.versions.length === 0) {
+                        const initialVerId = 'v_' + (item.createdAt ? new Date(item.createdAt).getTime() : Date.now()) + '_' + Math.random().toString(36).substring(2, 6);
+                        item.versions = [{
+                            versionId: initialVerId,
+                            versionNumber: 1,
+                            versionComment: item.versionComment || item.notes || 'Versión inicial',
+                            task: item.task || '',
+                            context: item.context || '',
+                            ref: item.ref || '',
+                            eval: item.eval || '',
+                            iter: item.iter || '',
+                            createdAt: item.createdAt || new Date().toISOString()
+                        }];
+                        item.activeVersionId = initialVerId;
+                        modified = true;
+                    }
+
+                    // Asegurar que activeVersionId apunta a una versión existente
+                    if (!item.activeVersionId || !item.versions.some(v => v.versionId === item.activeVersionId)) {
+                        item.activeVersionId = item.versions[item.versions.length - 1].versionId;
+                        modified = true;
+                    }
+
+                    // Sincronizar campos raíz con la versión activa para retrocompatibilidad
+                    const activeVer = getActiveVersion(item);
+                    item.task = activeVer.task || '';
+                    item.context = activeVer.context || '';
+                    item.ref = activeVer.ref || '';
+                    item.eval = activeVer.eval || '';
+                    item.iter = activeVer.iter || '';
+
+                    return item;
+                }).filter(Boolean);
+
+                if (modified) {
+                    localStorage.setItem(STORAGE_KEY_PROMPTS, JSON.stringify(list));
+                }
+                return list;
             } catch (err) {
                 console.error("Error reading saved prompts:", err);
                 return [];
@@ -3446,9 +3540,11 @@ Devuelve ÚNICAMENTE el bloque JSON.`;
             }
         }
 
+        let currentGeneratorFamily = 'GEN';
+
         function populateSavePromptFamilyDropdown() {
             const select = document.getElementById('save-prompt-family');
-            if (!select || select.options.length > 1) return;
+            if (!select) return;
 
             select.innerHTML = '<option value="GEN">General / Módulos Transversales</option>';
             if (typeof FP_FAMILIES !== 'undefined') {
@@ -3461,6 +3557,316 @@ Devuelve ÚNICAMENTE el bloque JSON.`;
             }
         }
 
+        function populateSavePromptFamilyFilter(selectedFamily = null) {
+            const select = document.getElementById('save-prompt-family-filter');
+            if (!select) return;
+
+            let html = '';
+            if (typeof FP_FAMILIES !== 'undefined') {
+                FP_FAMILIES.forEach(f => {
+                    html += `<option value="${f.code}">${f.code} - ${f.name}</option>`;
+                });
+            }
+            html += '<option value="GEN">GEN - General / Transversal</option>';
+            html += '<option value="ALL">★ Todas las Familias</option>';
+            select.innerHTML = html;
+
+            if (selectedFamily) {
+                select.value = selectedFamily;
+            } else {
+                select.value = currentGeneratorFamily || 'GEN';
+            }
+        }
+
+        function onSaveVersionFamilyFilterChange() {
+            populateSavePromptTargetSelect();
+        }
+
+        function populateSavePromptTargetSelect() {
+            const menu = document.getElementById('save-target-dropdown-menu');
+            const hiddenInput = document.getElementById('save-prompt-target-select');
+            const triggerText = document.getElementById('save-target-trigger-text');
+            const filterSelect = document.getElementById('save-prompt-family-filter');
+            if (!menu || !hiddenInput || !triggerText) return;
+
+            const filterFamily = filterSelect ? filterSelect.value : (currentGeneratorFamily || 'GEN');
+            const list = getSavedPrompts();
+
+            let filtered = list;
+            if (filterFamily !== 'ALL') {
+                filtered = list.filter(p => (p.familyCode || 'GEN') === filterFamily);
+            }
+
+            if (filtered.length === 0) {
+                menu.innerHTML = `
+                    <div class="p-3 text-center text-xs text-slate-400 space-y-1.5">
+                        <p>No tienes prompts guardados en la familia <strong>${filterFamily}</strong>.</p>
+                        <button type="button" onclick="document.getElementById('save-prompt-family-filter').value='ALL'; populateSavePromptTargetSelect();" class="text-xs text-brand-400 hover:text-brand-300 underline font-medium">
+                            Mostrar prompts de todas las familias
+                        </button>
+                    </div>
+                `;
+                hiddenInput.value = '';
+                triggerText.innerHTML = `<span class="text-slate-500 italic">No hay prompts en la familia ${filterFamily}</span>`;
+                onSavePromptTargetChange();
+                return;
+            }
+
+            menu.innerHTML = filtered.map(p => {
+                const activeVer = getActiveVersion(p);
+                const isSelected = hiddenInput.value === p.id;
+                return `
+                    <div class="p-2.5 rounded-xl hover:bg-slate-800/90 cursor-pointer transition border ${isSelected ? 'border-emerald-500/60 bg-emerald-950/30' : 'border-transparent hover:border-emerald-500/40'} space-y-1 group"
+                         onmouseenter="showPromptHoverPopup('${p.id}', event)"
+                         onmouseleave="hidePromptHoverPopup()"
+                         onclick="selectSaveTargetPrompt('${p.id}')">
+                        <div class="flex items-center justify-between gap-1.5">
+                            <div class="flex items-center gap-1.5 overflow-hidden">
+                                <span class="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-brand-500/20 text-brand-300 border border-brand-500/30 shrink-0">${escapeHtml(p.familyCode || 'GEN')}</span>
+                                <span class="text-[10px] font-mono text-emerald-400 bg-slate-950 px-1.5 py-0.5 rounded border border-slate-800 shrink-0 font-bold">ID: ${escapeHtml(p.id)}</span>
+                            </div>
+                            <span class="text-[10px] font-mono text-slate-400 shrink-0">v${activeVer.versionNumber} (${p.versions?.length || 1} ver)</span>
+                        </div>
+                        <div class="text-xs font-bold text-white group-hover:text-emerald-300 truncate transition">
+                            ${escapeHtml(p.title || 'Sin Título')}
+                        </div>
+                        <div class="text-[11px] text-slate-400 truncate">
+                            <span class="text-slate-500 font-mono">v${activeVer.versionNumber}:</span> ${escapeHtml(activeVer.versionComment || 'Sin comentario')}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            // Mantener selección previa si existe en filtered, o preseleccionar el primero
+            let targetToSelect = filtered.find(p => p.id === hiddenInput.value)?.id;
+            if (!targetToSelect && currentWorkingPromptId && filtered.some(p => p.id === currentWorkingPromptId)) {
+                targetToSelect = currentWorkingPromptId;
+            }
+            if (!targetToSelect) {
+                targetToSelect = filtered[0].id;
+            }
+
+            selectSaveTargetPrompt(targetToSelect);
+        }
+
+        function selectSaveTargetPrompt(promptId) {
+            const hiddenInput = document.getElementById('save-prompt-target-select');
+            const triggerText = document.getElementById('save-target-trigger-text');
+            const menu = document.getElementById('save-target-dropdown-menu');
+
+            if (hiddenInput) hiddenInput.value = promptId;
+
+            const list = getSavedPrompts();
+            const target = list.find(p => p.id === promptId);
+
+            if (target && triggerText) {
+                const activeVer = getActiveVersion(target);
+                triggerText.innerHTML = `
+                    <div class="flex items-center gap-1.5 truncate">
+                        <span class="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-brand-500/20 text-brand-300 border border-brand-500/30 shrink-0">${escapeHtml(target.familyCode || 'GEN')}</span>
+                        <span class="text-[10px] font-mono text-emerald-400 bg-slate-950 px-1.5 py-0.5 rounded border border-slate-800 font-bold shrink-0">ID: ${escapeHtml(target.id)}</span>
+                        <span class="font-bold text-white truncate">${escapeHtml(target.title || 'Sin Título')}</span>
+                        <span class="text-[10px] font-mono text-slate-400 shrink-0">(v${activeVer.versionNumber})</span>
+                    </div>
+                `;
+            } else if (triggerText) {
+                triggerText.innerHTML = `<span class="text-slate-400 italic">Selecciona un prompt...</span>`;
+            }
+
+            if (menu) menu.classList.add('hidden');
+            hidePromptHoverPopup();
+            onSavePromptTargetChange();
+        }
+
+        function toggleSaveTargetDropdown(event) {
+            if (event) event.stopPropagation();
+            const menu = document.getElementById('save-target-dropdown-menu');
+            if (menu) {
+                menu.classList.toggle('hidden');
+            }
+        }
+
+        function showPromptHoverPopup(promptId, event) {
+            const popup = document.getElementById('save-target-hover-popup');
+            if (!popup) return;
+
+            const list = getSavedPrompts();
+            const p = list.find(item => item.id === promptId);
+            if (!p) return;
+
+            const activeVer = getActiveVersion(p);
+            const dateStr = activeVer.createdAt ? new Date(activeVer.createdAt).toLocaleDateString('es-ES') : '';
+
+            popup.innerHTML = `
+                <!-- HEADER -->
+                <div class="border-b border-slate-800 pb-2.5 space-y-1">
+                    <div class="flex items-center justify-between gap-2">
+                        <span class="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-brand-500/20 text-brand-300 border border-brand-500/30">
+                            ${escapeHtml(p.familyCode || 'GEN')} • ${escapeHtml(p.familyName || 'General')}
+                        </span>
+                        <span class="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                            ★ Versión Activa: v${activeVer.versionNumber} ${dateStr ? `(${dateStr})` : ''}
+                        </span>
+                    </div>
+                    <h4 class="font-heading font-extrabold text-white text-sm leading-snug">
+                        ${escapeHtml(p.title || 'Sin Título')}
+                    </h4>
+                    <div class="text-[11px] font-mono text-emerald-400 font-bold">
+                        ID: ${escapeHtml(p.id)} • Total versiones: ${p.versions?.length || 1}
+                    </div>
+                </div>
+
+                <!-- COMENTARIO DE LA VERSIÓN -->
+                <div class="p-2.5 rounded-xl bg-emerald-950/40 border border-emerald-500/40 text-xs text-emerald-200 leading-relaxed shadow-sm">
+                    <i class="fa-solid fa-comment-dots text-emerald-400"></i>
+                    <strong>Nota de v${activeVer.versionNumber}:</strong> ${escapeHtml(activeVer.versionComment || 'Sin comentario específico.')}
+                </div>
+
+                <!-- CONTENIDO COMPLETO FASE 1: T-C-R -->
+                <div class="p-3 rounded-xl bg-slate-900 border border-sky-500/30 space-y-1.5 text-xs">
+                    <span class="text-sky-300 font-heading font-bold text-[11px] flex items-center gap-1">
+                        <i class="fa-solid fa-arrow-right-to-bracket text-sky-400"></i> Entrada TCREI (T-C-R):
+                    </span>
+                    <p class="text-slate-200 whitespace-pre-wrap leading-relaxed"><strong class="text-sky-400">T (Tarea/Rol):</strong> ${escapeHtml(activeVer.task || 'No definido')}</p>
+                    <p class="text-slate-300 whitespace-pre-wrap leading-relaxed"><strong class="text-teal-400">C (Contexto):</strong> ${escapeHtml(activeVer.context || 'No definido')}</p>
+                    <p class="text-slate-400 whitespace-pre-wrap leading-relaxed"><strong class="text-indigo-400">R (Referencias):</strong> ${escapeHtml(activeVer.ref || 'No definido')}</p>
+                </div>
+
+                <!-- CONTENIDO COMPLETO FASE 2: E-I -->
+                <div class="p-3 rounded-xl bg-slate-900 border border-amber-500/30 space-y-1.5 text-xs">
+                    <span class="text-amber-300 font-heading font-bold text-[11px] flex items-center gap-1">
+                        <i class="fa-solid fa-arrows-rotate text-amber-400"></i> Control & Iteración (E-I):
+                    </span>
+                    <p class="text-slate-200 whitespace-pre-wrap leading-relaxed"><strong class="text-amber-400">E (Evaluar):</strong> ${escapeHtml(activeVer.eval || 'No definido')}</p>
+                    <p class="text-slate-300 whitespace-pre-wrap leading-relaxed"><strong class="text-purple-400">I (Iterar):</strong> ${escapeHtml(activeVer.iter || 'No definido')}</p>
+                </div>
+
+                ${p.notes ? `
+                    <div class="p-2.5 rounded-xl bg-slate-900/80 border border-slate-800 text-xs text-slate-400 italic">
+                        <i class="fa-regular fa-note-sticky text-amber-400/80"></i> <strong>Notas generales:</strong> ${escapeHtml(p.notes)}
+                    </div>
+                ` : ''}
+            `;
+
+            // Calcular posición respecto a la modal activa de guardado
+            const modalEl = document.querySelector('#modal-save-prompt > div');
+            const popupWidth = 440;
+            const popupHeight = 520;
+            const windowW = window.innerWidth;
+            const windowH = window.innerHeight;
+
+            let left = 20;
+            let top = 20;
+
+            if (modalEl) {
+                const modalRect = modalEl.getBoundingClientRect();
+                // Si cabe a la derecha del modal
+                if (modalRect.right + popupWidth + 20 <= windowW) {
+                    left = modalRect.right + 14;
+                    top = Math.max(15, Math.min(modalRect.top, windowH - popupHeight - 20));
+                }
+                // Si cabe a la izquierda del modal
+                else if (modalRect.left - popupWidth - 20 >= 0) {
+                    left = modalRect.left - popupWidth - 14;
+                    top = Math.max(15, Math.min(modalRect.top, windowH - popupHeight - 20));
+                }
+                // Si la pantalla es más estrecha, centrar en la pantalla
+                else {
+                    left = Math.max(10, (windowW - popupWidth) / 2);
+                    top = 15;
+                }
+            } else if (event && event.currentTarget) {
+                const rect = event.currentTarget.getBoundingClientRect();
+                left = (rect.right + popupWidth + 20 <= windowW) ? (rect.right + 12) : Math.max(10, rect.left - popupWidth - 12);
+                top = Math.max(15, Math.min(rect.top, windowH - popupHeight - 20));
+            }
+
+            popup.style.left = `${Math.round(left)}px`;
+            popup.style.top = `${Math.round(top)}px`;
+            popup.style.width = `${Math.min(popupWidth, windowW - 24)}px`;
+
+            popup.classList.remove('hidden');
+        }
+
+        function hidePromptHoverPopup() {
+            const popup = document.getElementById('save-target-hover-popup');
+            if (popup) popup.classList.add('hidden');
+        }
+
+        function setSavePromptMode(mode) {
+            const tabNew = document.getElementById('save-mode-tab-new');
+            const tabVer = document.getElementById('save-mode-tab-version');
+            const sectionNew = document.getElementById('save-section-new-prompt');
+            const sectionVer = document.getElementById('save-section-new-version');
+            const submitBtnText = document.getElementById('save-prompt-submit-text');
+
+            if (mode === 'new_version') {
+                if (tabNew) {
+                    tabNew.classList.remove('bg-emerald-600', 'text-white', 'shadow-md');
+                    tabNew.classList.add('text-slate-400', 'hover:text-slate-200');
+                }
+                if (tabVer) {
+                    tabVer.classList.add('bg-emerald-600', 'text-white', 'shadow-md');
+                    tabVer.classList.remove('text-slate-400', 'hover:text-slate-200');
+                }
+                if (sectionNew) sectionNew.classList.add('hidden');
+                if (sectionVer) sectionVer.classList.remove('hidden');
+
+                const list = getSavedPrompts();
+                const currentFamily = (currentWorkingPromptId ? list.find(p => p.id === currentWorkingPromptId)?.familyCode : null) || currentGeneratorFamily || document.getElementById('save-prompt-family')?.value || 'GEN';
+                populateSavePromptFamilyFilter(currentFamily);
+                populateSavePromptTargetSelect();
+                onSavePromptTargetChange();
+                if (submitBtnText) submitBtnText.innerText = 'Guardar Nueva Versión';
+            } else {
+                if (tabNew) {
+                    tabNew.classList.add('bg-emerald-600', 'text-white', 'shadow-md');
+                    tabNew.classList.remove('text-slate-400', 'hover:text-slate-200');
+                }
+                if (tabVer) {
+                    tabVer.classList.remove('bg-emerald-600', 'text-white', 'shadow-md');
+                    tabVer.classList.add('text-slate-400', 'hover:text-slate-200');
+                }
+                if (sectionNew) sectionNew.classList.remove('hidden');
+                if (sectionVer) sectionVer.classList.add('hidden');
+                if (submitBtnText) submitBtnText.innerText = 'Guardar en Mi Banco';
+            }
+        }
+
+        function onSavePromptTargetChange() {
+            const hiddenInput = document.getElementById('save-prompt-target-select');
+            const infoCard = document.getElementById('save-prompt-target-info');
+            if (!hiddenInput || !infoCard) return;
+
+            const targetId = hiddenInput.value;
+            const list = getSavedPrompts();
+            const targetPrompt = list.find(p => p.id === targetId);
+
+            if (targetPrompt) {
+                const nextVerNum = (targetPrompt.versions ? targetPrompt.versions.reduce((max, v) => Math.max(max, v.versionNumber || 0), 0) : 1) + 1;
+                infoCard.innerHTML = `
+                    <div class="flex items-center justify-between text-xs">
+                        <span class="text-slate-400">Prompt seleccionado:</span>
+                        <span class="font-bold text-white truncate max-w-xs">${escapeHtml(targetPrompt.title)}</span>
+                    </div>
+                    <div class="flex items-center justify-between text-xs pt-1 border-t border-slate-800">
+                        <span class="text-slate-400">ID del prompt:</span>
+                        <span class="font-mono text-emerald-400 font-bold">${escapeHtml(targetPrompt.id)}</span>
+                    </div>
+                    <div class="flex items-center justify-between text-xs pt-1 border-t border-slate-800">
+                        <span class="text-slate-400">Versiones actuales:</span>
+                        <span class="font-mono text-slate-300">${targetPrompt.versions?.length || 1} versión/es</span>
+                    </div>
+                    <div class="flex items-center justify-between text-xs pt-1 border-t border-slate-800">
+                        <span class="text-slate-400">Nueva versión que se creará:</span>
+                        <span class="font-mono font-bold px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">v${nextVerNum}</span>
+                    </div>
+                `;
+            } else {
+                infoCard.innerHTML = `<span class="text-xs text-amber-400">Selecciona un prompt para añadir la nueva versión.</span>`;
+            }
+        }
+
         function openSavePromptModal(editId = null) {
             populateSavePromptFamilyDropdown();
             editingPromptId = editId;
@@ -3469,22 +3875,35 @@ Devuelve ÚNICAMENTE el bloque JSON.`;
             const familySelect = document.getElementById('save-prompt-family');
             const tagsInput = document.getElementById('save-prompt-tags');
             const notesInput = document.getElementById('save-prompt-notes');
+            const versionCommentInput = document.getElementById('save-prompt-version-comment');
             const modalHeading = document.getElementById('save-prompt-modal-heading');
             const submitBtnText = document.getElementById('save-prompt-submit-text');
+            const modeTabsContainer = document.getElementById('save-prompt-mode-tabs');
+
+            const list = getSavedPrompts();
+            const currentFamily = (currentWorkingPromptId ? list.find(p => p.id === currentWorkingPromptId)?.familyCode : null) || currentGeneratorFamily || 'GEN';
 
             if (editId) {
-                const list = getSavedPrompts();
+                // Modo Edición de Metadatos existentes
+                if (modeTabsContainer) modeTabsContainer.classList.add('hidden');
+                setSavePromptMode('new_prompt');
+
                 const item = list.find(p => p.id === editId);
                 if (item) {
+                    const activeVer = getActiveVersion(item);
                     modalHeading.innerHTML = '<i class="fa-solid fa-pen-to-square text-amber-400"></i> Editar Metadatos del Prompt';
                     titleInput.value = item.title || '';
                     familySelect.value = item.familyCode || 'GEN';
                     tagsInput.value = (item.tags || []).join(', ');
                     notesInput.value = item.notes || '';
+                    if (versionCommentInput) versionCommentInput.value = activeVer.versionComment || '';
                     if (submitBtnText) submitBtnText.innerText = 'Guardar Cambios';
                 }
             } else {
+                // Modo Guardado desde el Diseñador
+                if (modeTabsContainer) modeTabsContainer.classList.remove('hidden');
                 modalHeading.innerHTML = '<i class="fa-solid fa-floppy-disk text-emerald-400"></i> Guardar Prompt en Mi Banco';
+
                 const task = document.getElementById('gen-task').value.trim();
                 titleInput.value = '';
                 if (task) {
@@ -3493,10 +3912,19 @@ Devuelve ÚNICAMENTE el bloque JSON.`;
                 } else {
                     titleInput.value = `Prompt TCREI - ${new Date().toLocaleDateString('es-ES')}`;
                 }
-                familySelect.value = 'GEN';
+                familySelect.value = currentFamily;
                 tagsInput.value = '';
                 notesInput.value = '';
-                if (submitBtnText) submitBtnText.innerText = 'Guardar en Mi Banco';
+                if (versionCommentInput) versionCommentInput.value = 'Versión inicial';
+
+                // Si se estaba trabajando sobre un prompt previo del banco, preseleccionar modo nueva versión
+                if (currentWorkingPromptId && list.some(p => p.id === currentWorkingPromptId)) {
+                    setSavePromptMode('new_version');
+                    const newVerComment = document.getElementById('save-prompt-new-version-comment');
+                    if (newVerComment) newVerComment.value = '';
+                } else {
+                    setSavePromptMode('new_prompt');
+                }
             }
 
             modal.classList.remove('hidden');
@@ -3508,64 +3936,173 @@ Devuelve ÚNICAMENTE el bloque JSON.`;
             const modal = document.getElementById('modal-save-prompt');
             modal.classList.add('hidden');
             modal.classList.remove('flex');
+            hidePromptHoverPopup();
+            const menu = document.getElementById('save-target-dropdown-menu');
+            if (menu) menu.classList.add('hidden');
             editingPromptId = null;
         }
 
         function submitSavePrompt() {
-            const title = document.getElementById('save-prompt-title').value.trim();
-            const familyCode = document.getElementById('save-prompt-family').value;
-            const tagsStr = document.getElementById('save-prompt-tags').value.trim();
-            const notes = document.getElementById('save-prompt-notes').value.trim();
-
-            if (!title) {
-                showToast("Título Requerido", "Por favor, asigna un título o nombre a tu prompt.", "trash");
-                return;
-            }
-
-            const tags = tagsStr ? tagsStr.split(',').map(t => t.trim()).filter(Boolean) : [];
-            let familyName = "General / Transversal";
-            if (typeof FP_FAMILIES !== 'undefined') {
-                const fam = FP_FAMILIES.find(f => f.code === familyCode);
-                if (fam) familyName = fam.name;
-            }
-
             const list = getSavedPrompts();
             const now = new Date().toISOString();
 
+            // MODO 1: EDITAR METADATOS DE UN PROMPT EXISTENTE
             if (editingPromptId) {
-                const index = list.findIndex(p => p.id === editingPromptId);
-                if (index !== -1) {
-                    list[index] = {
-                        ...list[index],
-                        title,
-                        familyCode,
-                        familyName,
-                        tags,
-                        notes,
-                        updatedAt: now
-                    };
-                    saveSavedPrompts(list);
-                    showToast("Prompt Actualizado", `"${title}" ha sido actualizado en tu banco.`, "check");
-                }
-            } else {
-                const task = document.getElementById('gen-task').value.trim();
-                const context = document.getElementById('gen-context').value.trim();
-                const ref = document.getElementById('gen-ref').value.trim();
-                const evalCrit = document.getElementById('gen-eval').value.trim();
-                const iter = document.getElementById('gen-iter').value.trim();
+                const title = document.getElementById('save-prompt-title').value.trim();
+                const familyCode = document.getElementById('save-prompt-family').value;
+                const tagsStr = document.getElementById('save-prompt-tags').value.trim();
+                const notes = document.getElementById('save-prompt-notes').value.trim();
+                const versionComment = document.getElementById('save-prompt-version-comment')?.value.trim() || '';
 
-                if (!task && !context) {
-                    showToast("Diseñador Vacío", "Rellena al menos los campos del Diseñador antes de guardar.", "trash");
+                if (!title) {
+                    showToast("Título Requerido", "Por favor, asigna un título o nombre a tu prompt.", "trash");
                     return;
                 }
 
+                const tags = tagsStr ? tagsStr.split(',').map(t => t.trim()).filter(Boolean) : [];
+                let familyName = "General / Transversal";
+                if (typeof FP_FAMILIES !== 'undefined') {
+                    const fam = FP_FAMILIES.find(f => f.code === familyCode);
+                    if (fam) familyName = fam.name;
+                }
+
+                const index = list.findIndex(p => p.id === editingPromptId);
+                if (index !== -1) {
+                    const item = list[index];
+                    item.title = title;
+                    item.familyCode = familyCode;
+                    item.familyName = familyName;
+                    item.tags = tags;
+                    item.notes = notes;
+                    item.updatedAt = now;
+
+                    // Actualizar también el comentario de la versión activa si se especificó
+                    if (item.versions && item.versions.length) {
+                        const activeVer = getActiveVersion(item);
+                        if (activeVer) {
+                            activeVer.versionComment = versionComment;
+                        }
+                    }
+
+                    saveSavedPrompts(list);
+                    showToast("Prompt Actualizado", `"${title}" ha sido actualizado en tu banco.`, "check");
+                }
+
+                closeSavePromptModal();
+                renderPromptBank();
+                return;
+            }
+
+            // OBTENER CAMPOS DEL DISEÑADOR TCREI
+            const task = document.getElementById('gen-task').value.trim();
+            const context = document.getElementById('gen-context').value.trim();
+            const ref = document.getElementById('gen-ref').value.trim();
+            const evalCrit = document.getElementById('gen-eval').value.trim();
+            const iter = document.getElementById('gen-iter').value.trim();
+
+            if (!task && !context) {
+                showToast("Diseñador Vacío", "Rellena al menos los campos del Diseñador antes de guardar.", "trash");
+                return;
+            }
+
+            const sectionVer = document.getElementById('save-section-new-version');
+            const isNewVersionMode = sectionVer && !sectionVer.classList.contains('hidden');
+
+            // MODO 2: GUARDAR COMO NUEVA VERSIÓN DE UN PROMPT EXISTENTE
+            if (isNewVersionMode) {
+                const targetId = document.getElementById('save-prompt-target-select').value;
+                const versionComment = document.getElementById('save-prompt-new-version-comment').value.trim();
+
+                if (!targetId) {
+                    showToast("Selecciona un Prompt", "Debes seleccionar un prompt existente para añadirle la nueva versión.", "trash");
+                    return;
+                }
+
+                const index = list.findIndex(p => p.id === targetId);
+                if (index === -1) {
+                    showToast("Prompt no encontrado", "El prompt seleccionado ya no existe en el banco.", "trash");
+                    return;
+                }
+
+                const targetPrompt = list[index];
+                if (!targetPrompt.versions) targetPrompt.versions = [];
+
+                const nextVerNum = targetPrompt.versions.reduce((max, v) => Math.max(max, v.versionNumber || 0), 0) + 1;
+                const newVersionId = 'v_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6);
+
+                const newVersion = {
+                    versionId: newVersionId,
+                    versionNumber: nextVerNum,
+                    versionComment: versionComment || `Versión ${nextVerNum}`,
+                    task,
+                    context,
+                    ref,
+                    eval: evalCrit,
+                    iter,
+                    createdAt: now
+                };
+
+                targetPrompt.versions.push(newVersion);
+                targetPrompt.activeVersionId = newVersionId;
+                targetPrompt.updatedAt = now;
+                targetPrompt.task = task;
+                targetPrompt.context = context;
+                targetPrompt.ref = ref;
+                targetPrompt.eval = evalCrit;
+                targetPrompt.iter = iter;
+
+                // Actualizar estado de trabajo actual
+                currentWorkingPromptId = targetPrompt.id;
+                currentWorkingVersionId = newVersionId;
+                bankCardSelectedVersion[targetPrompt.id] = newVersionId;
+
+                saveSavedPrompts(list);
+                showToast("¡Nueva Versión Guardada!", `Se ha guardado la versión v${nextVerNum} de "${targetPrompt.title}".`, "check");
+            }
+            // MODO 3: GUARDAR COMO NUEVO PROMPT INDEPENDIENTE (CON v1)
+            else {
+                const title = document.getElementById('save-prompt-title').value.trim();
+                const familyCode = document.getElementById('save-prompt-family').value;
+                const tagsStr = document.getElementById('save-prompt-tags').value.trim();
+                const notes = document.getElementById('save-prompt-notes').value.trim();
+                const versionComment = document.getElementById('save-prompt-version-comment').value.trim() || 'Versión inicial';
+
+                if (!title) {
+                    showToast("Título Requerido", "Por favor, asigna un título o nombre a tu prompt.", "trash");
+                    return;
+                }
+
+                const tags = tagsStr ? tagsStr.split(',').map(t => t.trim()).filter(Boolean) : [];
+                let familyName = "General / Transversal";
+                if (typeof FP_FAMILIES !== 'undefined') {
+                    const fam = FP_FAMILIES.find(f => f.code === familyCode);
+                    if (fam) familyName = fam.name;
+                }
+
+                const newPromptId = 'tcrei_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
+                const initialVersionId = 'v_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6);
+
                 const newPrompt = {
-                    id: 'tcrei_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
+                    id: newPromptId,
                     title,
                     familyCode,
                     familyName,
                     tags,
                     notes,
+                    activeVersionId: initialVersionId,
+                    versions: [
+                        {
+                            versionId: initialVersionId,
+                            versionNumber: 1,
+                            versionComment,
+                            task,
+                            context,
+                            ref,
+                            eval: evalCrit,
+                            iter,
+                            createdAt: now
+                        }
+                    ],
                     task,
                     context,
                     ref,
@@ -3574,7 +4111,12 @@ Devuelve ÚNICAMENTE el bloque JSON.`;
                     createdAt: now,
                     updatedAt: now
                 };
+
                 list.unshift(newPrompt);
+                currentWorkingPromptId = newPromptId;
+                currentWorkingVersionId = initialVersionId;
+                bankCardSelectedVersion[newPromptId] = initialVersionId;
+
                 saveSavedPrompts(list);
                 showToast("¡Prompt Guardado!", `Guardado en Mi Banco de Prompts (${list.length} en total).`, "check");
             }
@@ -3584,7 +4126,7 @@ Devuelve ÚNICAMENTE el bloque JSON.`;
         }
 
         // =============================================================
-        // 14. PROMPT BANK MANAGER MODAL & GALLERY
+        // 14. PROMPT BANK MANAGER MODAL & VERSIONED GALLERY
         // =============================================================
         function populateBankFilterFamilyDropdown() {
             const select = document.getElementById('bank-filter-family');
@@ -3616,6 +4158,54 @@ Devuelve ÚNICAMENTE el bloque JSON.`;
             modal.classList.remove('flex');
         }
 
+        function changePromptCardVersion(promptId, versionId) {
+            bankCardSelectedVersion[promptId] = versionId;
+            renderPromptBank();
+        }
+
+        function setPromptActiveVersion(promptId, versionId) {
+            const list = getSavedPrompts();
+            const item = list.find(p => p.id === promptId);
+            if (!item) return;
+
+            const targetVer = getVersion(item, versionId);
+            item.activeVersionId = versionId;
+            item.updatedAt = new Date().toISOString();
+            item.task = targetVer.task;
+            item.context = targetVer.context;
+            item.ref = targetVer.ref;
+            item.eval = targetVer.eval;
+            item.iter = targetVer.iter;
+
+            bankCardSelectedVersion[promptId] = versionId;
+            saveSavedPrompts(list);
+            renderPromptBank();
+            if (editingHistoryPromptId === promptId) {
+                renderPromptHistoryTimeline(promptId);
+            }
+            showToast("Versión Activa Actualizada", `La versión v${targetVer.versionNumber} es ahora la versión principal de "${item.title}".`, "check");
+        }
+
+        function editVersionCommentPrompt(promptId, versionId) {
+            const list = getSavedPrompts();
+            const item = list.find(p => p.id === promptId);
+            if (!item) return;
+
+            const ver = getVersion(item, versionId);
+            const currentComment = ver.versionComment || '';
+            const newComment = prompt(`Editar comentario de la versión v${ver.versionNumber} para "${item.title}":`, currentComment);
+
+            if (newComment !== null) {
+                ver.versionComment = newComment.trim();
+                saveSavedPrompts(list);
+                renderPromptBank();
+                if (editingHistoryPromptId === promptId) {
+                    renderPromptHistoryTimeline(promptId);
+                }
+                showToast("Comentario Actualizado", `Comentario de v${ver.versionNumber} actualizado.`, "check");
+            }
+        }
+
         function renderPromptBank() {
             const container = document.getElementById('prompt-bank-list-container');
             const searchVal = (document.getElementById('bank-search-input')?.value || '').toLowerCase().trim();
@@ -3633,7 +4223,8 @@ Devuelve ÚNICAMENTE el bloque JSON.`;
                     (item.task && item.task.toLowerCase().includes(searchVal)) ||
                     (item.context && item.context.toLowerCase().includes(searchVal)) ||
                     (item.familyName && item.familyName.toLowerCase().includes(searchVal)) ||
-                    (item.tags && item.tags.some(t => t.toLowerCase().includes(searchVal)));
+                    (item.tags && item.tags.some(t => t.toLowerCase().includes(searchVal))) ||
+                    (item.versions && item.versions.some(v => (v.versionComment && v.versionComment.toLowerCase().includes(searchVal))));
                 return matchesFamily && matchText;
             });
 
@@ -3649,7 +4240,7 @@ Devuelve ÚNICAMENTE el bloque JSON.`;
                             <div class="space-y-1">
                                 <h4 class="font-heading font-extrabold text-white text-base sm:text-lg">Tu Banco de Prompts está vacío</h4>
                                 <p class="text-xs sm:text-sm text-slate-400 max-w-md mx-auto">
-                                    Guarda tus mejores estructuras pedagógicas desde el Diseñador TCREI para reutilizarlas en tus clases o sincronizarlas con Google Drive.
+                                    Guarda tus mejores estructuras pedagógicas y sus sucesivas versiones desde el Diseñador TCREI para reutilizarlas o sincronizarlas con Google Drive.
                                 </p>
                             </div>
                             <div class="pt-2 flex flex-wrap justify-center gap-3">
@@ -3678,8 +4269,20 @@ Devuelve ÚNICAMENTE el bloque JSON.`;
             }
 
             container.innerHTML = filtered.map(item => {
-                const dateStr = item.updatedAt ? new Date(item.updatedAt).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' }) : '';
-                const tagsHtml = (item.tags || []).map(t => `<span class="text-[10px] font-mono px-2 py-0.5 rounded-full bg-slate-900 text-slate-300 border border-slate-800">#${t}</span>`).join('');
+                const versions = item.versions || [];
+                const selectedVerId = bankCardSelectedVersion[item.id] || item.activeVersionId || versions[versions.length - 1]?.versionId;
+                const curVer = getVersion(item, selectedVerId);
+                const isActive = curVer.versionId === item.activeVersionId;
+                const dateStr = curVer.createdAt ? new Date(curVer.createdAt).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' }) : '';
+                const tagsHtml = (item.tags || []).map(t => `<span class="text-[10px] font-mono px-2 py-0.5 rounded-full bg-slate-900 text-slate-300 border border-slate-800">#${escapeHtml(t)}</span>`).join('');
+
+                const versionOptionsHtml = versions.map(v => {
+                    const isAct = v.versionId === item.activeVersionId;
+                    const vDate = v.createdAt ? new Date(v.createdAt).toLocaleDateString('es-ES') : '';
+                    return `<option value="${v.versionId}" ${v.versionId === selectedVerId ? 'selected' : ''}>
+                        v${v.versionNumber} • ${vDate}${isAct ? ' ★ (Activa)' : ''}
+                    </option>`;
+                }).join('');
 
                 return `
                     <div class="p-5 rounded-2xl bg-slate-950 border border-slate-800/80 hover:border-slate-700 transition space-y-4 shadow-lg group">
@@ -3689,64 +4292,108 @@ Devuelve ÚNICAMENTE el bloque JSON.`;
                             <div class="space-y-1 max-w-xl">
                                 <div class="flex flex-wrap items-center gap-2">
                                     <span class="text-[11px] font-mono font-bold px-2.5 py-0.5 rounded-lg bg-brand-500/20 text-brand-300 border border-brand-500/30">
-                                        ${item.familyCode || 'GEN'}
+                                        ${escapeHtml(item.familyCode || 'GEN')}
                                     </span>
-                                    <span class="text-xs text-slate-400 font-medium">${item.familyName || 'General'}</span>
+                                    <span class="text-xs text-slate-400 font-medium">${escapeHtml(item.familyName || 'General')}</span>
                                     ${dateStr ? `<span class="text-[10px] text-slate-500 flex items-center gap-1"><i class="fa-regular fa-clock text-[9px]"></i> ${dateStr}</span>` : ''}
                                 </div>
                                 <h4 class="font-heading font-extrabold text-white text-base group-hover:text-emerald-300 transition">
-                                    ${item.title || 'Sin Título'}
+                                    ${escapeHtml(item.title || 'Sin Título')}
                                 </h4>
                                 ${tagsHtml ? `<div class="flex flex-wrap gap-1.5 pt-0.5">${tagsHtml}</div>` : ''}
                             </div>
 
                             <!-- CARD ACTIONS -->
                             <div class="flex flex-wrap items-center gap-1.5 shrink-0">
-                                <button onclick="loadPromptToDesigner('${item.id}')" title="Cargar este prompt directamente en el Diseñador" class="text-xs bg-emerald-600/90 hover:bg-emerald-500 text-white font-heading font-bold px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 shadow-md shadow-emerald-600/20 active:scale-95">
+                                <button onclick="loadPromptToDesigner('${item.id}', '${curVer.versionId}')" title="Cargar versión v${curVer.versionNumber} en el Diseñador" class="text-xs bg-emerald-600/90 hover:bg-emerald-500 text-white font-heading font-bold px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 shadow-md shadow-emerald-600/20 active:scale-95">
                                     <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
-                                    <span>Cargar</span>
+                                    <span>Cargar v${curVer.versionNumber}</span>
                                 </button>
-                                <button onclick="copyPromptBankPhase1('${item.id}')" title="Copiar Fases 1 a 3 (Prompt de Entrada T-C-R)" class="text-xs bg-slate-900 hover:bg-slate-800 text-sky-400 hover:text-sky-300 px-2.5 py-1.5 rounded-xl border border-sky-500/30 transition flex items-center gap-1 active:scale-95">
+                                <button onclick="copyPromptBankPhase1('${item.id}', '${curVer.versionId}')" title="Copiar Fases 1 a 3 (Prompt de Entrada T-C-R)" class="text-xs bg-slate-900 hover:bg-slate-800 text-sky-400 hover:text-sky-300 px-2.5 py-1.5 rounded-xl border border-sky-500/30 transition flex items-center gap-1 active:scale-95">
                                     <i class="fa-regular fa-copy"></i>
                                     <span class="hidden sm:inline">T-C-R</span>
                                 </button>
-                                <button onclick="copyPromptBankPhase2('${item.id}')" title="Copiar Fases 4 y 5 (Human-in-the-Loop E-I)" class="text-xs bg-slate-900 hover:bg-slate-800 text-amber-400 hover:text-amber-300 px-2.5 py-1.5 rounded-xl border border-amber-500/30 transition flex items-center gap-1 active:scale-95">
+                                <button onclick="copyPromptBankPhase2('${item.id}', '${curVer.versionId}')" title="Copiar Fases 4 y 5 (Human-in-the-Loop E-I)" class="text-xs bg-slate-900 hover:bg-slate-800 text-amber-400 hover:text-amber-300 px-2.5 py-1.5 rounded-xl border border-amber-500/30 transition flex items-center gap-1 active:scale-95">
                                     <i class="fa-solid fa-arrows-rotate"></i>
                                     <span class="hidden sm:inline">E-I</span>
                                 </button>
-                                <button onclick="duplicatePromptInBank('${item.id}')" title="Duplicar prompt" class="text-xs bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white p-2 rounded-xl border border-slate-800 transition">
+                                <button onclick="duplicatePromptInBank('${item.id}')" title="Duplicar prompt completo" class="text-xs bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white p-2 rounded-xl border border-slate-800 transition">
                                     <i class="fa-regular fa-clone"></i>
                                 </button>
-                                <button onclick="exportSinglePromptToMarkdown('${item.id}')" title="Descargar este prompt en archivo Markdown (.md)" class="text-xs bg-slate-900 hover:bg-slate-800 text-purple-400 hover:text-purple-300 p-2 rounded-xl border border-purple-500/30 transition active:scale-95">
+                                <button onclick="exportSinglePromptToMarkdown('${item.id}')" title="Descargar este prompt en archivo Markdown (.md) con su historial" class="text-xs bg-slate-900 hover:bg-slate-800 text-purple-400 hover:text-purple-300 p-2 rounded-xl border border-purple-500/30 transition active:scale-95">
                                     <i class="fa-brands fa-markdown"></i>
                                 </button>
                                 <button onclick="openSavePromptModal('${item.id}')" title="Editar metadatos / título" class="text-xs bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white p-2 rounded-xl border border-slate-800 transition">
                                     <i class="fa-regular fa-pen-to-square"></i>
                                 </button>
-                                <button onclick="deletePromptFromBank('${item.id}')" title="Eliminar prompt" class="text-xs bg-slate-900 hover:bg-rose-950 text-rose-400 hover:text-rose-300 p-2 rounded-xl border border-slate-800 hover:border-rose-800 transition">
+                                <button onclick="deletePromptFromBank('${item.id}')" title="Eliminar prompt completo" class="text-xs bg-slate-900 hover:bg-rose-950 text-rose-400 hover:text-rose-300 p-2 rounded-xl border border-slate-800 hover:border-rose-800 transition">
                                     <i class="fa-regular fa-trash-can"></i>
                                 </button>
                             </div>
                         </div>
 
-                        <!-- CARD PREVIEW FIELDS (COLLAPSIBLE / SUMMARY) -->
+                        <!-- VERSION CONTROL BAR & VERSION METADATA -->
+                        <div class="flex flex-wrap items-center justify-between gap-2.5 bg-slate-900/70 p-2.5 rounded-xl border border-slate-800">
+                            <div class="flex flex-wrap items-center gap-2">
+                                <span class="text-xs font-heading font-bold text-slate-300 flex items-center gap-1">
+                                    <i class="fa-solid fa-code-branch text-emerald-400"></i> Versión:
+                                </span>
+                                <select onchange="changePromptCardVersion('${item.id}', this.value)" class="text-xs bg-slate-950 border border-emerald-500/40 text-emerald-300 font-mono font-bold rounded-lg px-2.5 py-1 focus:ring-1 focus:ring-emerald-500 focus:outline-none cursor-pointer">
+                                    ${versionOptionsHtml}
+                                </select>
+                                <span class="text-[11px] text-slate-400 font-mono">(${versions.length} en total)</span>
+                            </div>
+
+                            <div class="flex items-center gap-2">
+                                ${!isActive ? `
+                                    <button onclick="setPromptActiveVersion('${item.id}', '${curVer.versionId}')" title="Marcar versión v${curVer.versionNumber} como la versión principal/activa" class="text-[11px] bg-slate-950 hover:bg-emerald-950 text-emerald-400 hover:text-emerald-300 border border-emerald-500/40 px-2.5 py-1 rounded-lg transition flex items-center gap-1 active:scale-95">
+                                        <i class="fa-solid fa-thumbtack text-[10px]"></i>
+                                        <span>Hacer Activa</span>
+                                    </button>
+                                ` : `
+                                    <span class="text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1">
+                                        <i class="fa-solid fa-check text-[9px]"></i> Versión Activa
+                                    </span>
+                                `}
+                                <button onclick="openPromptHistoryModal('${item.id}')" title="Ver historial de todas las versiones" class="text-[11px] bg-slate-950 hover:bg-slate-800 text-sky-300 hover:text-sky-200 border border-sky-500/30 px-2.5 py-1 rounded-lg transition flex items-center gap-1 active:scale-95">
+                                    <i class="fa-solid fa-clock-rotate-left text-[10px]"></i>
+                                    <span>Historial</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- VERSION COMMENT HIGHLIGHT BOX -->
+                        <div class="p-3 rounded-xl bg-emerald-950/20 border border-emerald-500/25 flex items-start justify-between gap-2 text-xs">
+                            <div class="flex items-start gap-2 flex-grow">
+                                <i class="fa-regular fa-comment-dots text-emerald-400 text-sm mt-0.5 shrink-0"></i>
+                                <div class="space-y-0.5">
+                                    <span class="text-emerald-400 font-bold font-mono text-[11px]">Comentario de v${curVer.versionNumber}:</span>
+                                    <p class="text-slate-200 leading-relaxed">${escapeHtml(curVer.versionComment || 'Sin comentario específico para esta versión.')}</p>
+                                </div>
+                            </div>
+                            <button onclick="editVersionCommentPrompt('${item.id}', '${curVer.versionId}')" title="Editar comentario de la versión ${curVer.versionNumber}" class="text-slate-400 hover:text-white p-1 rounded hover:bg-slate-800 transition shrink-0">
+                                <i class="fa-regular fa-pen-to-square text-xs"></i>
+                            </button>
+                        </div>
+
+                        <!-- CARD PREVIEW FIELDS (T-C-R & E-I FOR SELECTED VERSION) -->
                         <div class="grid md:grid-cols-2 gap-3 text-xs">
                             <div class="p-3 rounded-xl bg-slate-900/40 border border-sky-500/20 space-y-1.5">
                                 <span class="text-sky-300 font-heading font-bold flex items-center gap-1.5">
-                                    <i class="fa-solid fa-arrow-right-to-bracket text-sky-400"></i> Entrada TCREI (T-C-R):
+                                    <i class="fa-solid fa-arrow-right-to-bracket text-sky-400"></i> Entrada TCREI (T-C-R) • v${curVer.versionNumber}:
                                 </span>
-                                <p class="text-slate-300 line-clamp-2 leading-relaxed"><strong class="text-sky-400/80">T:</strong> ${item.task || '<span class="text-slate-600 italic">No definido</span>'}</p>
-                                <p class="text-slate-400 line-clamp-1"><strong class="text-teal-400/80">C:</strong> ${item.context || '<span class="text-slate-600 italic">No definido</span>'}</p>
-                                <p class="text-slate-500 line-clamp-1"><strong class="text-indigo-400/80">R:</strong> ${item.ref || '<span class="text-slate-600 italic">No definido</span>'}</p>
+                                <p class="text-slate-300 line-clamp-2 leading-relaxed"><strong class="text-sky-400/80">T:</strong> ${escapeHtml(curVer.task) || '<span class="text-slate-600 italic">No definido</span>'}</p>
+                                <p class="text-slate-400 line-clamp-1"><strong class="text-teal-400/80">C:</strong> ${escapeHtml(curVer.context) || '<span class="text-slate-600 italic">No definido</span>'}</p>
+                                <p class="text-slate-500 line-clamp-1"><strong class="text-indigo-400/80">R:</strong> ${escapeHtml(curVer.ref) || '<span class="text-slate-600 italic">No definido</span>'}</p>
                             </div>
 
                             <div class="p-3 rounded-xl bg-slate-900/40 border border-amber-500/20 space-y-1.5">
                                 <span class="text-amber-300 font-heading font-bold flex items-center gap-1.5">
-                                    <i class="fa-solid fa-arrows-rotate text-amber-400"></i> Control & Iteración (E-I):
+                                    <i class="fa-solid fa-arrows-rotate text-amber-400"></i> Control & Iteración (E-I) • v${curVer.versionNumber}:
                                 </span>
-                                <p class="text-slate-300 line-clamp-2 leading-relaxed"><strong class="text-amber-400/80">E:</strong> ${item.eval || '<span class="text-slate-600 italic">No definido</span>'}</p>
-                                <p class="text-slate-400 line-clamp-1"><strong class="text-purple-400/80">I:</strong> ${item.iter || '<span class="text-slate-600 italic">No definido</span>'}</p>
-                                ${item.notes ? `<p class="text-slate-500 line-clamp-1 italic"><i class="fa-regular fa-note-sticky text-amber-400/70"></i> ${item.notes}</p>` : ''}
+                                <p class="text-slate-300 line-clamp-2 leading-relaxed"><strong class="text-amber-400/80">E:</strong> ${escapeHtml(curVer.eval) || '<span class="text-slate-600 italic">No definido</span>'}</p>
+                                <p class="text-slate-400 line-clamp-1"><strong class="text-purple-400/80">I:</strong> ${escapeHtml(curVer.iter) || '<span class="text-slate-600 italic">No definido</span>'}</p>
+                                ${item.notes ? `<p class="text-slate-500 line-clamp-1 italic"><i class="fa-regular fa-note-sticky text-amber-400/70"></i> ${escapeHtml(item.notes)}</p>` : ''}
                             </div>
                         </div>
 
@@ -3757,16 +4404,21 @@ Devuelve ÚNICAMENTE el bloque JSON.`;
             if (window.FontAwesome && window.FontAwesome.dom) window.FontAwesome.dom.i2svg();
         }
 
-        function loadPromptToDesigner(id) {
+        function loadPromptToDesigner(id, versionId = null) {
             const list = getSavedPrompts();
             const item = list.find(p => p.id === id);
             if (!item) return;
 
-            document.getElementById('gen-task').value = item.task || '';
-            document.getElementById('gen-context').value = item.context || '';
-            document.getElementById('gen-ref').value = item.ref || '';
-            document.getElementById('gen-eval').value = item.eval || '';
-            document.getElementById('gen-iter').value = item.iter || '';
+            const ver = getVersion(item, versionId);
+
+            document.getElementById('gen-task').value = ver.task || '';
+            document.getElementById('gen-context').value = ver.context || '';
+            document.getElementById('gen-ref').value = ver.ref || '';
+            document.getElementById('gen-eval').value = ver.eval || '';
+            document.getElementById('gen-iter').value = ver.iter || '';
+
+            currentWorkingPromptId = item.id;
+            currentWorkingVersionId = ver.versionId;
 
             onPhase1Input();
             onPhase2Input();
@@ -3774,7 +4426,8 @@ Devuelve ÚNICAMENTE el bloque JSON.`;
 
             switchTab('generator');
             closePromptBankModal();
-            showToast("Prompt Cargado", `"${item.title}" está listo en el Diseñador TCREI.`, "bolt");
+            closePromptHistoryModal();
+            showToast("Prompt Cargado", `"${item.title}" (v${ver.versionNumber}) está listo en el Diseñador TCREI.`, "bolt");
         }
 
         function deletePromptFromBank(id) {
@@ -3782,10 +4435,12 @@ Devuelve ÚNICAMENTE el bloque JSON.`;
             const item = list.find(p => p.id === id);
             const title = item ? item.title : 'este prompt';
 
-            if (confirm(`¿Estás seguro de que deseas eliminar "${title}" de tu banco personal?`)) {
+            if (confirm(`¿Estás seguro de que deseas eliminar "${title}" y todas sus versiones de tu banco personal?`)) {
                 const updated = list.filter(p => p.id !== id);
+                delete bankCardSelectedVersion[id];
                 saveSavedPrompts(updated);
                 renderPromptBank();
+                closePromptHistoryModal();
                 showToast("Prompt Eliminado", `Se ha eliminado de tu banco local.`, "trash");
             }
         }
@@ -3795,10 +4450,18 @@ Devuelve ÚNICAMENTE el bloque JSON.`;
             const item = list.find(p => p.id === id);
             if (!item) return;
 
+            const newPromptId = 'tcrei_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
+            const duplicatedVersions = (item.versions || []).map(v => ({
+                ...v,
+                versionId: 'v_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6)
+            }));
+
             const duplicate = {
                 ...item,
-                id: 'tcrei_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
+                id: newPromptId,
                 title: `${item.title} (Copia)`,
+                versions: duplicatedVersions,
+                activeVersionId: duplicatedVersions[duplicatedVersions.length - 1]?.versionId,
                 createdAt: new Date().toISOString(),
                 updatedAt: new Date().toISOString()
             };
@@ -3806,48 +4469,181 @@ Devuelve ÚNICAMENTE el bloque JSON.`;
             list.unshift(duplicate);
             saveSavedPrompts(list);
             renderPromptBank();
-            showToast("Prompt Duplicado", `Se creó "${duplicate.title}".`, "check");
+            showToast("Prompt Duplicado", `Se creó "${duplicate.title}" con todas sus versiones.`, "check");
         }
 
-        function copyPromptBankPhase1(id) {
+        function copyPromptBankPhase1(id, versionId = null) {
             const list = getSavedPrompts();
             const item = list.find(p => p.id === id);
             if (!item) return;
 
-            const text = `# PROMPT ESTRUCTURADO (MARCO TCREI - FASE 1: ENTRADA)
+            const ver = getVersion(item, versionId);
+            const text = `# PROMPT ESTRUCTURADO (MARCO TCREI - FASE 1: ENTRADA) [v${ver.versionNumber}]
 [TAREA & ROL (TASK)]:
-${item.task || '[Tarea y Rol asignado]'}
+${ver.task || '[Tarea y Rol asignado]'}
 
 [CONTEXTO (CONTEXT)]:
-${item.context || '[Contexto del alumnado y taller]'}
+${ver.context || '[Contexto del alumnado y taller]'}
 
 [REFERENCIAS & RESTRICCIONES (REFERENCES)]:
-${item.ref || '[Referencias normativas y técnicas]'}`;
+${ver.ref || '[Referencias normativas y técnicas]'}`;
 
             navigator.clipboard.writeText(text).then(() => {
-                showToast("¡Fases 1 a 3 Copiadas!", "Prompt de entrada listo para enviar a la IA.", "check");
+                showToast(`¡Fases 1 a 3 Copiadas (v${ver.versionNumber})!`, "Prompt de entrada listo para enviar a la IA.", "check");
             });
         }
 
-        function copyPromptBankPhase2(id) {
+        function copyPromptBankPhase2(id, versionId = null) {
             const list = getSavedPrompts();
             const item = list.find(p => p.id === id);
             if (!item) return;
 
-            const text = `# GUÍA DOCENTE Y REPROMPTING (MARCO TCREI - FASE 2: HUMAN-IN-THE-LOOP)
+            const ver = getVersion(item, versionId);
+            const text = `# GUÍA DOCENTE Y REPROMPTING (MARCO TCREI - FASE 2: HUMAN-IN-THE-LOOP) [v${ver.versionNumber}]
 [EVALUACIÓN CRÍTICA DEL OUTPUT (EVALUATE)]:
-${item.eval || '[Criterios de auditoría crítica del output]'}
+${ver.eval || '[Criterios de auditoría crítica del output]'}
 
 [PROMPT DE 2ª ITERACIÓN / REPROMPTING (ITERATE)]:
-${item.iter || '[Prompt de 2ª iteración / Reprompting]'}`;
+${ver.iter || '[Prompt de 2ª iteración / Reprompting]'}`;
 
             navigator.clipboard.writeText(text).then(() => {
-                showToast("¡Fases 4 y 5 Copiadas!", "Guía de control e iteración lista para pegar.", "bolt");
+                showToast(`¡Fases 4 y 5 Copiadas (v${ver.versionNumber})!`, "Guía de control e iteración lista para pegar.", "bolt");
             });
         }
 
         // =============================================================
-        // 15. LOCAL BACKUP & RESTORE (.JSON)
+        // 14.1 PROMPT HISTORY TIMELINE MODAL CONTROLLER
+        // =============================================================
+        function openPromptHistoryModal(promptId) {
+            editingHistoryPromptId = promptId;
+            renderPromptHistoryTimeline(promptId);
+            const modal = document.getElementById('modal-prompt-history');
+            if (modal) {
+                modal.classList.remove('hidden');
+                modal.classList.add('flex');
+            }
+            if (window.FontAwesome && window.FontAwesome.dom) window.FontAwesome.dom.i2svg();
+        }
+
+        function closePromptHistoryModal() {
+            const modal = document.getElementById('modal-prompt-history');
+            if (modal) {
+                modal.classList.add('hidden');
+                modal.classList.remove('flex');
+            }
+            editingHistoryPromptId = null;
+        }
+
+        function renderPromptHistoryTimeline(promptId) {
+            const list = getSavedPrompts();
+            const item = list.find(p => p.id === promptId);
+            if (!item) {
+                closePromptHistoryModal();
+                return;
+            }
+
+            const titleEl = document.getElementById('history-modal-title');
+            const subtitleEl = document.getElementById('history-modal-subtitle');
+            const container = document.getElementById('history-versions-list');
+            const summaryEl = document.getElementById('history-version-count-summary');
+
+            if (titleEl) titleEl.innerText = `Historial: "${item.title}"`;
+            if (subtitleEl) subtitleEl.innerText = `Familia: ${item.familyName || item.familyCode || 'General'} • Total de iteraciones guardadas: ${item.versions?.length || 1}`;
+            if (summaryEl) summaryEl.innerText = `${item.versions?.length || 1} versión/es registrada/s`;
+
+            if (!container) return;
+
+            const versions = [...(item.versions || [])].reverse(); // más recientes primero
+
+            container.innerHTML = versions.map((ver, idx) => {
+                const isActive = ver.versionId === item.activeVersionId;
+                const dateStr = ver.createdAt ? new Date(ver.createdAt).toLocaleString('es-ES') : '-';
+
+                return `
+                    <div class="p-4 rounded-2xl bg-slate-950 border ${isActive ? 'border-emerald-500/50 bg-emerald-950/10' : 'border-slate-800'} space-y-3 shadow-md">
+                        <div class="flex flex-wrap justify-between items-center gap-2 border-b border-slate-900 pb-2">
+                            <div class="flex items-center gap-2">
+                                <span class="font-mono font-bold text-xs px-2.5 py-0.5 rounded-lg ${isActive ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-slate-900 text-slate-300 border border-slate-800'}">
+                                    v${ver.versionNumber}
+                                </span>
+                                ${isActive ? `<span class="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-bold">★ Activa</span>` : ''}
+                                <span class="text-[11px] text-slate-400"><i class="fa-regular fa-clock text-[10px]"></i> ${dateStr}</span>
+                            </div>
+
+                            <div class="flex items-center gap-1.5">
+                                <button onclick="loadPromptToDesigner('${item.id}', '${ver.versionId}')" title="Cargar esta versión en el Diseñador" class="text-xs bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-2.5 py-1 rounded-lg transition flex items-center gap-1">
+                                    <i class="fa-solid fa-arrow-up-right-from-square text-[9px]"></i> Cargar
+                                </button>
+                                ${!isActive ? `
+                                    <button onclick="setPromptActiveVersion('${item.id}', '${ver.versionId}')" title="Establecer como versión activa" class="text-xs bg-slate-900 hover:bg-slate-800 text-emerald-400 border border-slate-700 px-2.5 py-1 rounded-lg transition">
+                                        Hacer Activa
+                                    </button>
+                                ` : ''}
+                                <button onclick="editVersionCommentPrompt('${item.id}', '${ver.versionId}')" title="Editar comentario de esta versión" class="text-xs bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 p-1.5 rounded-lg transition">
+                                    <i class="fa-regular fa-pen-to-square"></i>
+                                </button>
+                                ${versions.length > 1 ? `
+                                    <button onclick="deletePromptVersion('${item.id}', '${ver.versionId}')" title="Eliminar esta versión" class="text-xs bg-slate-900 hover:bg-rose-950 text-rose-400 border border-slate-800 hover:border-rose-800 p-1.5 rounded-lg transition">
+                                        <i class="fa-regular fa-trash-can"></i>
+                                    </button>
+                                ` : ''}
+                            </div>
+                        </div>
+
+                        <!-- COMENTARIO DE LA VERSIÓN -->
+                        <div class="p-2.5 rounded-xl bg-slate-900/60 border border-slate-800 text-xs text-slate-300">
+                            <span class="text-emerald-400 font-bold">Comentario / Registro de cambios:</span>
+                            <p class="mt-0.5 text-slate-200 leading-relaxed">${escapeHtml(ver.versionComment || 'Sin comentario específico.')}</p>
+                        </div>
+
+                        <!-- RESUMEN TCREI -->
+                        <div class="grid sm:grid-cols-2 gap-2 text-[11px] text-slate-400">
+                            <div class="bg-slate-900/30 p-2 rounded-lg border border-slate-800/50">
+                                <strong class="text-sky-400">T:</strong> ${escapeHtml(ver.task ? ver.task.substring(0, 90) + '...' : 'No definido')}
+                            </div>
+                            <div class="bg-slate-900/30 p-2 rounded-lg border border-slate-800/50">
+                                <strong class="text-amber-400">E:</strong> ${escapeHtml(ver.eval ? ver.eval.substring(0, 90) + '...' : 'No definido')}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            if (window.FontAwesome && window.FontAwesome.dom) window.FontAwesome.dom.i2svg();
+        }
+
+        function deletePromptVersion(promptId, versionId) {
+            const list = getSavedPrompts();
+            const item = list.find(p => p.id === promptId);
+            if (!item || !item.versions || item.versions.length <= 1) {
+                showToast("No se puede eliminar", "Un prompt debe contener al menos una versión.", "trash");
+                return;
+            }
+
+            const ver = getVersion(item, versionId);
+            if (confirm(`¿Estás seguro de que deseas eliminar la versión v${ver.versionNumber} de "${item.title}"?`)) {
+                item.versions = item.versions.filter(v => v.versionId !== versionId);
+                if (item.activeVersionId === versionId) {
+                    item.activeVersionId = item.versions[item.versions.length - 1].versionId;
+                }
+                const newActiveVer = getActiveVersion(item);
+                item.task = newActiveVer.task;
+                item.context = newActiveVer.context;
+                item.ref = newActiveVer.ref;
+                item.eval = newActiveVer.eval;
+                item.iter = newActiveVer.iter;
+                item.updatedAt = new Date().toISOString();
+
+                bankCardSelectedVersion[promptId] = item.activeVersionId;
+                saveSavedPrompts(list);
+                renderPromptBank();
+                renderPromptHistoryTimeline(promptId);
+                showToast("Versión Eliminada", `Se eliminó la versión v${ver.versionNumber}.`, "trash");
+            }
+        }
+
+        // =============================================================
+        // 15. LOCAL BACKUP & RESTORE (.JSON, .MD, .TXT)
         // =============================================================
         function exportPromptBankToJson() {
             const prompts = getSavedPrompts();
@@ -3858,7 +4654,7 @@ ${item.iter || '[Prompt de 2ª iteración / Reprompting]'}`;
 
             const payload = {
                 app: "Kit_IA_Docentes_TCREI",
-                version: "2.0.0",
+                version: "2.1.0",
                 exportedAt: new Date().toISOString(),
                 promptsCount: prompts.length,
                 prompts: prompts
@@ -3873,10 +4669,10 @@ ${item.iter || '[Prompt de 2ª iteración / Reprompting]'}`;
             downloadAnchor.click();
             downloadAnchor.remove();
 
-            showToast("Backup Descargado", `Exportados ${prompts.length} prompts a archivo .json.`, "download");
+            showToast("Backup Descargado", `Exportados ${prompts.length} prompts con todo su historial a .json.`, "download");
         }
 
-        // EXPORT PROMPT BANK TO MARKDOWN (.MD)
+        // EXPORT PROMPT BANK TO MARKDOWN (.MD) CON HISTORIAL
         function exportPromptBankToMarkdown() {
             const prompts = getSavedPrompts();
             if (prompts.length === 0) {
@@ -3899,25 +4695,44 @@ ${item.iter || '[Prompt de 2ª iteración / Reprompting]'}`;
                 const fam = p.familyName ? `${p.familyCode || 'GEN'} - ${p.familyName}` : (p.familyCode || 'General');
                 const tags = (p.tags && p.tags.length > 0) ? p.tags.map(t => `\`#${t}\``).join(' ') : '_Sin etiquetas_';
                 const dateP = p.updatedAt ? new Date(p.updatedAt).toLocaleDateString('es-ES') : '-';
+                const activeVer = getActiveVersion(p);
+                const versions = p.versions || [];
 
-                md += `## ${idx + 1}. ${title}\n\n`;
+                md += `## ${idx + 1}. ${title} (Versión Activa: v${activeVer.versionNumber})\n\n`;
                 md += `- **Familia Profesional:** ${fam}\n`;
                 md += `- **Etiquetas:** ${tags}\n`;
-                md += `- **Última Actualización:** ${dateP}\n\n`;
+                md += `- **Última Actualización:** ${dateP}\n`;
+                if (activeVer.versionComment) {
+                    md += `- **Comentario de Versión (v${activeVer.versionNumber}):** ${activeVer.versionComment}\n`;
+                }
+                md += `\n`;
 
                 md += `### 📥 Fase 1: Prompt de Entrada Estructurado (T-C-R)\n\n`;
                 md += `\`\`\`text\n`;
-                md += `[TAREA & ROL]:\n${p.task || 'No especificado'}\n\n`;
-                md += `[CONTEXTO DE AULA / TALLER]:\n${p.context || 'No especificado'}\n\n`;
-                md += `[REFERENCIAS & NORMATIVA]:\n${p.ref || 'No especificado'}\n`;
+                md += `[TAREA & ROL]:\n${activeVer.task || 'No especificado'}\n\n`;
+                md += `[CONTEXTO DE AULA / TALLER]:\n${activeVer.context || 'No especificado'}\n\n`;
+                md += `[REFERENCIAS & NORMATIVA]:\n${activeVer.ref || 'No especificado'}\n`;
                 md += `\`\`\`\n\n`;
 
                 md += `### 🔄 Fase 2: Control Crítico e Iteración (E-I)\n\n`;
-                md += `- **🎯 Auditoría Docente (Evaluar - E):**\n  ${p.eval || '_No especificado_'}\n\n`;
-                md += `- **🔁 Reprompting / Prueba de Esfuerzo (Iterar - I):**\n  > ${p.iter || '_No especificado_'}\n\n`;
+                md += `- **🎯 Auditoría Docente (Evaluar - E):**\n  ${activeVer.eval || '_No especificado_'}\n\n`;
+                md += `- **🔁 Reprompting / Prueba de Esfuerzo (Iterar - I):**\n  > ${activeVer.iter || '_No especificado_'}\n\n`;
 
                 if (p.notes && p.notes.trim()) {
-                    md += `💡 **Observaciones Pedagógicas:**\n> ${p.notes}\n\n`;
+                    md += `💡 **Observaciones Pedagógicas Generales:**\n> ${p.notes}\n\n`;
+                }
+
+                // APÉNDICE DE HISTORIAL DE VERSIONES
+                if (versions.length > 1) {
+                    md += `### 📜 Apéndice: Historial de Versiones (${versions.length} versiones)\n\n`;
+                    md += `| Versión | Fecha | Comentario / Registro de Cambios | Estado |\n`;
+                    md += `| :--- | :--- | :--- | :--- |\n`;
+                    versions.forEach(v => {
+                        const isAct = v.versionId === p.activeVersionId;
+                        const vDate = v.createdAt ? new Date(v.createdAt).toLocaleDateString('es-ES') : '-';
+                        md += `| **v${v.versionNumber}** | ${vDate} | ${v.versionComment || '_Sin comentario_'} | ${isAct ? '**★ Activa**' : 'Histórica'} |\n`;
+                    });
+                    md += `\n`;
                 }
 
                 md += `---\n\n`;
@@ -3933,10 +4748,10 @@ ${item.iter || '[Prompt de 2ª iteración / Reprompting]'}`;
             a.remove();
             URL.revokeObjectURL(url);
 
-            showToast("Exportado a Markdown", `Exportados ${prompts.length} prompts a archivo .md.`, "download");
+            showToast("Exportado a Markdown", `Exportados ${prompts.length} prompts con versión activa y apéndice de histórico.`, "download");
         }
 
-        // EXPORT SINGLE PROMPT TO MARKDOWN (.MD)
+        // EXPORT SINGLE PROMPT TO MARKDOWN (.MD) CON HISTORIAL
         function exportSinglePromptToMarkdown(id) {
             const list = getSavedPrompts();
             const p = list.find(item => item.id === id);
@@ -3947,43 +4762,61 @@ ${item.iter || '[Prompt de 2ª iteración / Reprompting]'}`;
             const safeTitle = (p.title || 'Prompt_TCREI').replace(/[/\\?%*:|"<>]/g, '-').replace(/\s+/g, '_');
             const fam = p.familyName ? `${p.familyCode || 'GEN'} - ${p.familyName}` : (p.familyCode || 'General');
             const tags = (p.tags && p.tags.length > 0) ? p.tags.map(t => `\`#${t}\``).join(' ') : '_Sin etiquetas_';
+            const activeVer = getActiveVersion(p);
+            const versions = p.versions || [];
 
-            let md = `# ${p.title || 'Prompt TCREI'}\n\n`;
+            let md = `# ${p.title || 'Prompt TCREI'} (v${activeVer.versionNumber})\n\n`;
             md += `> **Familia Profesional:** ${fam}  \n`;
             md += `> **Etiquetas:** ${tags}  \n`;
             md += `> **Fecha:** ${dateFormatted}  \n`;
             md += `> **Marco Metodológico:** TCREI (Docencia FP)\n\n`;
+            if (activeVer.versionComment) {
+                md += `> **Nota de Versión (v${activeVer.versionNumber}):** ${activeVer.versionComment}  \n\n`;
+            }
             md += `---\n\n`;
 
             md += `## 📥 Fase 1: Prompt de Entrada Estructurado (T-C-R)\n\n`;
             md += `\`\`\`text\n`;
-            md += `[TAREA & ROL]:\n${p.task || 'No especificado'}\n\n`;
-            md += `[CONTEXTO DE AULA / TALLER]:\n${p.context || 'No especificado'}\n\n`;
-            md += `[REFERENCIAS & NORMATIVA]:\n${p.ref || 'No especificado'}\n`;
+            md += `[TAREA & ROL]:\n${activeVer.task || 'No especificado'}\n\n`;
+            md += `[CONTEXTO DE AULA / TALLER]:\n${activeVer.context || 'No especificado'}\n\n`;
+            md += `[REFERENCIAS & NORMATIVA]:\n${activeVer.ref || 'No especificado'}\n`;
             md += `\`\`\`\n\n`;
 
             md += `## 🔄 Fase 2: Control Crítico e Iteración (E-I)\n\n`;
-            md += `- **🎯 Criterios de Evaluación Docente (E):**\n  ${p.eval || '_No especificado_'}\n\n`;
-            md += `- **🔁 Estrategia de Reprompting / Iteración (I):**\n  > ${p.iter || '_No especificado_'}\n\n`;
+            md += `- **🎯 Criterios de Evaluación Docente (E):**\n  ${activeVer.eval || '_No especificado_'}\n\n`;
+            md += `- **🔁 Estrategia de Reprompting / Iteración (I):**\n  > ${activeVer.iter || '_No especificado_'}\n\n`;
 
             if (p.notes && p.notes.trim()) {
-                md += `💡 **Observaciones Pedagógicas:**\n> ${p.notes}\n\n`;
+                md += `💡 **Observaciones Pedagógicas Generales:**\n> ${p.notes}\n\n`;
+            }
+
+            // APÉNDICE DE HISTORIAL DE VERSIONES
+            if (versions.length > 1) {
+                md += `## 📜 Apéndice: Historial de Versiones (${versions.length} versiones)\n\n`;
+                md += `| Versión | Fecha | Comentario / Registro de Cambios | Estado |\n`;
+                md += `| :--- | :--- | :--- | :--- |\n`;
+                versions.forEach(v => {
+                    const isAct = v.versionId === p.activeVersionId;
+                    const vDate = v.createdAt ? new Date(v.createdAt).toLocaleDateString('es-ES') : '-';
+                    md += `| **v${v.versionNumber}** | ${vDate} | ${v.versionComment || '_Sin comentario_'} | ${isAct ? '**★ Activa**' : 'Histórica'} |\n`;
+                });
+                md += `\n`;
             }
 
             const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `${safeTitle}.md`;
+            a.download = `${safeTitle}_v${activeVer.versionNumber}.md`;
             document.body.appendChild(a);
             a.click();
             a.remove();
             URL.revokeObjectURL(url);
 
-            showToast("Prompt Descargado", `"${p.title}" exportado como Markdown.`, "download");
+            showToast("Prompt Descargado", `"${p.title}" exportado como Markdown (v${activeVer.versionNumber}).`, "download");
         }
 
-        // EXPORT PROMPT BANK TO PLAIN TEXT (.TXT)
+        // EXPORT PROMPT BANK TO PLAIN TEXT (.TXT) CON HISTORIAL
         function exportPromptBankToTxt() {
             const prompts = getSavedPrompts();
             if (prompts.length === 0) {
@@ -4008,25 +4841,41 @@ ${item.iter || '[Prompt de 2ª iteración / Reprompting]'}`;
                 const fam = p.familyName ? `${p.familyCode || 'GEN'} - ${p.familyName}` : (p.familyCode || 'General');
                 const tags = (p.tags && p.tags.length > 0) ? p.tags.join(', ') : 'Sin etiquetas';
                 const dateP = p.updatedAt ? new Date(p.updatedAt).toLocaleDateString('es-ES') : '-';
+                const activeVer = getActiveVersion(p);
+                const versions = p.versions || [];
 
                 txt += `----------------------------------------------------------------------\n`;
-                txt += `PROMPT ${idx + 1}: ${title.toUpperCase()}\n`;
+                txt += `PROMPT ${idx + 1}: ${title.toUpperCase()} (VERSIÓN ACTIVA: v${activeVer.versionNumber})\n`;
                 txt += `----------------------------------------------------------------------\n`;
                 txt += `Familia Profesional: ${fam}\n`;
                 txt += `Etiquetas: ${tags}\n`;
-                txt += `Última Actualización: ${dateP}\n\n`;
+                txt += `Última Actualización: ${dateP}\n`;
+                if (activeVer.versionComment) {
+                    txt += `Comentario de Versión Activa (v${activeVer.versionNumber}): ${activeVer.versionComment}\n`;
+                }
+                txt += `\n`;
 
                 txt += `[FASE 1: PROMPT DE ENTRADA ESTRUCTURADO (T-C-R)]\n`;
-                txt += `* Tarea & Rol (T):\n  ${(p.task || 'No especificado').replace(/\n/g, '\n  ')}\n\n`;
-                txt += `* Contexto de Aula / Taller (C):\n  ${(p.context || 'No especificado').replace(/\n/g, '\n  ')}\n\n`;
-                txt += `* Referencias & Normativa (R):\n  ${(p.ref || 'No especificado').replace(/\n/g, '\n  ')}\n\n`;
+                txt += `* Tarea & Rol (T):\n  ${(activeVer.task || 'No especificado').replace(/\n/g, '\n  ')}\n\n`;
+                txt += `* Contexto de Aula / Taller (C):\n  ${(activeVer.context || 'No especificado').replace(/\n/g, '\n  ')}\n\n`;
+                txt += `* Referencias & Normativa (R):\n  ${(activeVer.ref || 'No especificado').replace(/\n/g, '\n  ')}\n\n`;
 
                 txt += `[FASE 2: CONTROL CRÍTICO E ITERACIÓN (E-I)]\n`;
-                txt += `* Auditoría Docente (Evaluar - E):\n  ${(p.eval || 'No especificado').replace(/\n/g, '\n  ')}\n\n`;
-                txt += `* Reprompting / Prueba de Esfuerzo (Iterar - I):\n  ${(p.iter || 'No especificado').replace(/\n/g, '\n  ')}\n\n`;
+                txt += `* Auditoría Docente (Evaluar - E):\n  ${(activeVer.eval || 'No especificado').replace(/\n/g, '\n  ')}\n\n`;
+                txt += `* Reprompting / Prueba de Esfuerzo (Iterar - I):\n  ${(activeVer.iter || 'No especificado').replace(/\n/g, '\n  ')}\n\n`;
 
                 if (p.notes && p.notes.trim()) {
                     txt += `* Observaciones Pedagógicas:\n  ${p.notes.replace(/\n/g, '\n  ')}\n\n`;
+                }
+
+                if (versions.length > 1) {
+                    txt += `[HISTORIAL DE VERSIONES (${versions.length} versiones)]\n`;
+                    versions.forEach(v => {
+                        const isAct = v.versionId === p.activeVersionId;
+                        const vDate = v.createdAt ? new Date(v.createdAt).toLocaleDateString('es-ES') : '-';
+                        txt += `* v${v.versionNumber} (${vDate}) ${isAct ? '[ACTIVA]' : ''}: ${v.versionComment || 'Sin comentario'}\n`;
+                    });
+                    txt += `\n`;
                 }
 
                 txt += `\n`;
@@ -4042,7 +4891,7 @@ ${item.iter || '[Prompt de 2ª iteración / Reprompting]'}`;
             a.remove();
             URL.revokeObjectURL(url);
 
-            showToast("Exportado a Texto", `Exportados ${prompts.length} prompts a archivo .txt.`, "download");
+            showToast("Exportado a Texto", `Exportados ${prompts.length} prompts con versión activa e histórico.`, "download");
         }
 
         // DROPDOWN EXPORT CONTROLLER
@@ -4065,6 +4914,13 @@ ${item.iter || '[Prompt de 2ª iteración / Reprompting]'}`;
             const wrapper = document.getElementById('export-dropdown-wrapper');
             if (wrapper && !wrapper.contains(event.target)) {
                 closeExportDropdown();
+            }
+
+            const targetTrigger = document.getElementById('save-target-dropdown-trigger');
+            const targetMenu = document.getElementById('save-target-dropdown-menu');
+            if (targetTrigger && targetMenu && !targetTrigger.contains(event.target) && !targetMenu.contains(event.target)) {
+                targetMenu.classList.add('hidden');
+                hidePromptHoverPopup();
             }
         });
 
@@ -4114,8 +4970,8 @@ ${item.iter || '[Prompt de 2ª iteración / Reprompting]'}`;
             if (listEl) {
                 listEl.innerHTML = payload.prompts.slice(0, 5).map(p => `
                     <div class="flex items-center justify-between p-2 rounded-lg bg-slate-900/60 border border-slate-800 text-xs">
-                        <span class="text-white font-medium truncate max-w-xs">${p.title || 'Sin Título'}</span>
-                        <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-brand-500/20 text-brand-300">${p.familyCode || 'GEN'}</span>
+                        <span class="text-white font-medium truncate max-w-xs">${escapeHtml(p.title || 'Sin Título')}</span>
+                        <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-brand-500/20 text-brand-300">${escapeHtml(p.familyCode || 'GEN')} (${p.versions?.length || 1}v)</span>
                     </div>
                 `).join('');
                 if (payload.prompts.length > 5) {
@@ -4149,7 +5005,22 @@ ${item.iter || '[Prompt de 2ª iteración / Reprompting]'}`;
                 existingPrompts.forEach(p => existingMap.set(p.id, p));
 
                 importedPrompts.forEach(imp => {
-                    existingMap.set(imp.id, imp);
+                    if (existingMap.has(imp.id)) {
+                        const existing = existingMap.get(imp.id);
+                        const versionsMap = new Map((existing.versions || []).map(v => [v.versionId, v]));
+                        (imp.versions || []).forEach(v => {
+                            versionsMap.set(v.versionId, v);
+                        });
+                        const mergedVersions = Array.from(versionsMap.values()).sort((a, b) => (a.versionNumber || 0) - (b.versionNumber || 0));
+                        existingMap.set(imp.id, {
+                            ...existing,
+                            ...imp,
+                            versions: mergedVersions,
+                            activeVersionId: imp.activeVersionId || existing.activeVersionId || mergedVersions[mergedVersions.length - 1]?.versionId
+                        });
+                    } else {
+                        existingMap.set(imp.id, imp);
+                    }
                 });
                 finalPrompts = Array.from(existingMap.values());
             }
@@ -4569,7 +5440,7 @@ ${item.iter || '[Prompt de 2ª iteración / Reprompting]'}`;
     </div>
 
     <!-- ================================================================= -->
-    <!-- MODAL 3: GUARDAR / EDITAR PROMPT EN BANCO PERSONAL                 -->
+    <!-- MODAL 3: GUARDAR / EDITAR PROMPT EN BANCO PERSONAL (VERSIONADO)     -->
     <!-- ================================================================= -->
     <div id="modal-save-prompt"
         class="fixed inset-0 z-[70] bg-slate-950/80 backdrop-blur-md hidden items-center justify-center p-4">
@@ -4585,12 +5456,22 @@ ${item.iter || '[Prompt de 2ª iteración / Reprompting]'}`;
                 </button>
             </div>
 
-            <p class="text-xs text-slate-300 leading-relaxed">
-                Guarda la estructura actual del Diseñador TCREI en la base de datos local de tu navegador para
-                reutilizarla o respaldarla en Google Drive.
-            </p>
+            <!-- MODE SWITCHER TABS (NUEVO PROMPT VS NUEVA VERSIÓN) -->
+            <div id="save-prompt-mode-tabs" class="grid grid-cols-2 p-1 bg-slate-900/90 rounded-2xl border border-slate-800 text-xs">
+                <button type="button" id="save-mode-tab-new" onclick="setSavePromptMode('new_prompt')"
+                    class="py-2 px-3 rounded-xl font-heading font-bold transition flex items-center justify-center gap-1.5 bg-emerald-600 text-white shadow-md">
+                    <i class="fa-solid fa-plus text-xs"></i>
+                    <span>Nuevo Prompt</span>
+                </button>
+                <button type="button" id="save-mode-tab-version" onclick="setSavePromptMode('new_version')"
+                    class="py-2 px-3 rounded-xl font-heading font-bold transition flex items-center justify-center gap-1.5 text-slate-400 hover:text-slate-200">
+                    <i class="fa-solid fa-code-branch text-xs"></i>
+                    <span>Añadir Nueva Versión</span>
+                </button>
+            </div>
 
-            <div class="space-y-4 text-xs sm:text-sm">
+            <!-- SECTION 1: NUEVO PROMPT / EDICIÓN DE METADATOS -->
+            <div id="save-section-new-prompt" class="space-y-4 text-xs sm:text-sm">
                 <div class="space-y-1.5">
                     <label class="font-heading font-bold text-slate-300 flex items-center justify-between">
                         <span>Título del Prompt:</span>
@@ -4620,7 +5501,16 @@ ${item.iter || '[Prompt de 2ª iteración / Reprompting]'}`;
 
                 <div class="space-y-1.5">
                     <label class="font-heading font-bold text-slate-300 flex items-center justify-between">
-                        <span>Notas / Observaciones pedagógicas:</span>
+                        <span>Comentario de la Versión:</span>
+                        <span class="text-[10px] text-emerald-400 font-normal">Metadato de la versión</span>
+                    </label>
+                    <input type="text" id="save-prompt-version-comment" placeholder="Ej: Versión inicial con restricciones de seguridad de taller"
+                        class="w-full p-3 bg-slate-950 border border-emerald-500/40 rounded-xl text-slate-200 focus:ring-2 focus:ring-emerald-500 focus:outline-none text-xs">
+                </div>
+
+                <div class="space-y-1.5">
+                    <label class="font-heading font-bold text-slate-300 flex items-center justify-between">
+                        <span>Notas / Observaciones pedagógicas generales:</span>
                         <span class="text-[10px] text-slate-500 font-normal">Opcional</span>
                     </label>
                     <textarea id="save-prompt-notes" rows="2"
@@ -4628,6 +5518,65 @@ ${item.iter || '[Prompt de 2ª iteración / Reprompting]'}`;
                         class="w-full p-3 bg-slate-950 border border-slate-700 rounded-xl text-slate-200 focus:ring-2 focus:ring-emerald-500 focus:outline-none text-xs"></textarea>
                 </div>
             </div>
+
+            <!-- SECTION 2: AÑADIR COMO NUEVA VERSIÓN A UN PROMPT EXISTENTE -->
+            <div id="save-section-new-version" class="hidden space-y-4 text-xs sm:text-sm">
+                <!-- FILTRO DE FAMILIA PROFESIONAL -->
+                <div class="space-y-1.5">
+                    <label class="font-heading font-bold text-slate-300 flex items-center justify-between">
+                        <span class="flex items-center gap-1.5">
+                            <i class="fa-solid fa-filter text-emerald-400"></i> Familia del Prompt:
+                        </span>
+                        <span class="text-[10px] text-slate-400 font-normal">Filtro activo</span>
+                    </label>
+                    <select id="save-prompt-family-filter" onchange="onSaveVersionFamilyFilterChange()"
+                        class="w-full p-2.5 bg-slate-950 border border-slate-700 rounded-xl text-slate-200 focus:ring-2 focus:ring-emerald-500 focus:outline-none text-xs">
+                        <!-- Populated dynamically -->
+                    </select>
+                </div>
+
+                <!-- SELECTOR PERSONALIZADO CON ID Y PREVIEW EN HOVER -->
+                <div class="space-y-1.5 relative">
+                    <label class="font-heading font-bold text-slate-300 flex items-center justify-between">
+                        <span>Selecciona el Prompt Existente:</span>
+                        <span class="text-[10px] text-emerald-400 font-normal">Pasa el cursor para ver el contenido</span>
+                    </label>
+
+                    <!-- Hidden input que almacena el ID del prompt seleccionado -->
+                    <input type="hidden" id="save-prompt-target-select" value="">
+
+                    <!-- Trigger del selector desplegable -->
+                    <button type="button" id="save-target-dropdown-trigger" onclick="toggleSaveTargetDropdown(event)"
+                        class="w-full p-3 bg-slate-950 border border-emerald-500/50 hover:border-emerald-400 rounded-xl text-left text-slate-200 text-xs flex items-center justify-between gap-2 transition focus:ring-2 focus:ring-emerald-500 shadow-inner">
+                        <div id="save-target-trigger-text" class="truncate flex-grow">
+                            <span class="text-slate-400 italic">Selecciona un prompt...</span>
+                        </div>
+                        <i class="fa-solid fa-chevron-down text-[10px] text-slate-400 shrink-0"></i>
+                    </button>
+
+                    <!-- Menú desplegable con lista de prompts de la misma familia e IDs -->
+                    <div id="save-target-dropdown-menu"
+                        class="hidden absolute left-0 right-0 top-full mt-1 z-[85] max-h-56 overflow-y-auto rounded-2xl bg-slate-900 border border-emerald-500/50 shadow-2xl backdrop-blur-2xl p-1.5 space-y-1">
+                        <!-- Populated dynamically by populateSavePromptTargetSelect() -->
+                    </div>
+                </div>
+
+                <!-- INFO DE LA VERSIÓN QUE SE VA A CREAR -->
+                <div id="save-prompt-target-info" class="p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-2">
+                    <!-- Populated dynamically -->
+                </div>
+
+                <div class="space-y-1.5">
+                    <label class="font-heading font-bold text-slate-300 flex items-center justify-between">
+                        <span>Comentario / Registro de Cambios de esta Versión:</span>
+                        <span class="text-[10px] text-emerald-400 font-normal">Recomendado</span>
+                    </label>
+                    <textarea id="save-prompt-new-version-comment" rows="3"
+                        placeholder="¿Qué has adaptado o mejorado en esta versión? Ej: Adaptado para 2º curso con menor nivel de andamiaje y rúbrica simplificada."
+                        class="w-full p-3 bg-slate-950 border border-emerald-500/50 rounded-xl text-slate-200 focus:ring-2 focus:ring-emerald-500 focus:outline-none text-xs"></textarea>
+                </div>
+            </div>
+
 
             <div class="pt-3 border-t border-slate-800 flex justify-end items-center gap-2">
                 <button onclick="closeSavePromptModal()"
@@ -4665,7 +5614,7 @@ ${item.iter || '[Prompt de 2ª iteración / Reprompting]'}`;
                                 class="text-xs font-mono font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">0
                                 guardados</span>
                         </div>
-                        <p class="text-xs text-slate-400 mt-0.5">Colección persistente de prompts TCREI creados para tus
+                        <p class="text-xs text-slate-400 mt-0.5">Colección persistente de prompts TCREI con historial de versiones para tus
                             módulos formativos.</p>
                     </div>
                 </div>
@@ -4682,7 +5631,7 @@ ${item.iter || '[Prompt de 2ª iteración / Reprompting]'}`;
                 <div class="flex flex-wrap items-center gap-2 flex-grow">
                     <div class="relative flex-grow sm:flex-grow-0 sm:w-64">
                         <input type="text" id="bank-search-input" oninput="renderPromptBank()"
-                            placeholder="Buscar por título, rol, tag..."
+                            placeholder="Buscar por título, rol, tag, versión..."
                             class="w-full pl-9 pr-3 py-2 bg-slate-900 border border-slate-700/80 rounded-xl text-slate-200 placeholder-slate-500 text-xs focus:ring-2 focus:ring-emerald-500 focus:outline-none">
                         <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-slate-500 text-xs"></i>
                     </div>
@@ -4703,13 +5652,13 @@ ${item.iter || '[Prompt de 2ª iteración / Reprompting]'}`;
                             <i class="fa-solid fa-chevron-down text-[9px] text-slate-400 ml-0.5"></i>
                         </button>
                         <div id="export-dropdown-menu"
-                            class="hidden absolute left-0 sm:right-0 sm:left-auto mt-1.5 w-52 rounded-2xl bg-slate-900/95 border border-slate-700 shadow-2xl backdrop-blur-xl p-1.5 z-40 space-y-1">
+                            class="hidden absolute left-0 sm:right-0 sm:left-auto mt-1.5 w-56 rounded-2xl bg-slate-900/95 border border-slate-700 shadow-2xl backdrop-blur-xl p-1.5 z-40 space-y-1">
                             <button onclick="exportPromptBankToJson(); closeExportDropdown();"
                                 class="w-full text-left px-3 py-2 text-xs text-slate-200 hover:text-white hover:bg-slate-800/80 rounded-xl transition flex items-center gap-2">
                                 <i class="fa-solid fa-file-code text-sky-400 w-4 text-center"></i>
                                 <div>
                                     <strong class="block text-white">JSON (.json)</strong>
-                                    <span class="text-[10px] text-slate-400">Backup reutilizable</span>
+                                    <span class="text-[10px] text-slate-400">Backup completo con versiones</span>
                                 </div>
                             </button>
                             <button onclick="exportPromptBankToMarkdown(); closeExportDropdown();"
@@ -4717,7 +5666,7 @@ ${item.iter || '[Prompt de 2ª iteración / Reprompting]'}`;
                                 <i class="fa-brands fa-markdown text-purple-400 w-4 text-center"></i>
                                 <div>
                                     <strong class="block text-white">Markdown (.md)</strong>
-                                    <span class="text-[10px] text-slate-400">Documento maquetado</span>
+                                    <span class="text-[10px] text-slate-400">Activo + tabla de histórico</span>
                                 </div>
                             </button>
                             <button onclick="exportPromptBankToTxt(); closeExportDropdown();"
@@ -4725,7 +5674,7 @@ ${item.iter || '[Prompt de 2ª iteración / Reprompting]'}`;
                                 <i class="fa-regular fa-file-lines text-emerald-400 w-4 text-center"></i>
                                 <div>
                                     <strong class="block text-white">Texto Plano (.txt)</strong>
-                                    <span class="text-[10px] text-slate-400">Texto estándar editable</span>
+                                    <span class="text-[10px] text-slate-400">Texto editable con histórico</span>
                                 </div>
                             </button>
                         </div>
@@ -4761,7 +5710,7 @@ ${item.iter || '[Prompt de 2ª iteración / Reprompting]'}`;
             <!-- FOOTER -->
             <div class="pt-3 border-t border-slate-800 flex justify-between items-center gap-3 shrink-0">
                 <span class="text-[11px] text-slate-500 hidden sm:inline">
-                    <i class="fa-solid fa-shield-halved text-emerald-400"></i> Todos los prompts se guardan localmente
+                    <i class="fa-solid fa-shield-halved text-emerald-400"></i> Todos los prompts y versiones se guardan localmente
                     en tu navegador de forma privada.
                 </span>
                 <div class="flex items-center gap-2 ml-auto">
@@ -4828,7 +5777,7 @@ ${item.iter || '[Prompt de 2ª iteración / Reprompting]'}`;
                         <span class="font-heading font-bold text-emerald-400 flex items-center gap-1.5">
                             <i class="fa-solid fa-code-merge"></i> Combinar (Merge)
                         </span>
-                        <p class="text-[11px] text-slate-400 group-hover:text-slate-300">Conserva tus prompts actuales y
+                        <p class="text-[11px] text-slate-400 group-hover:text-slate-300">Conserva tus prompts y versiones actuales y
                             añade los nuevos del backup.</p>
                     </button>
                     <button onclick="executeRestore('overwrite')"
@@ -4851,9 +5800,50 @@ ${item.iter || '[Prompt de 2ª iteración / Reprompting]'}`;
         </div>
     </div>
 
-    <!-- HIDDEN LOCAL FILE INPUT FOR IMPORT -->
-    <input type="file" id="local-restore-file-input" class="hidden" accept=".json"
-        onchange="handleLocalRestoreFile(event)">
+    <!-- ================================================================= -->
+    <!-- MODAL 6: HISTORIAL DE VERSIONES DEL PROMPT (TIMELINE)              -->
+    <!-- ================================================================= -->
+    <div id="modal-prompt-history"
+        class="fixed inset-0 z-[75] bg-slate-950/85 backdrop-blur-md hidden items-center justify-center p-3 sm:p-6 overflow-y-auto">
+        <div
+            class="glass-panel-dark max-w-3xl w-full p-5 sm:p-7 rounded-3xl border border-slate-700 shadow-2xl space-y-5 my-auto max-h-[90vh] flex flex-col">
+
+            <!-- HEADER -->
+            <div class="flex justify-between items-center border-b border-slate-800 pb-3 shrink-0">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-2xl bg-sky-500/20 border border-sky-500/40 text-sky-400 flex items-center justify-center text-lg">
+                        <i class="fa-solid fa-clock-rotate-left"></i>
+                    </div>
+                    <div>
+                        <h3 id="history-modal-title" class="text-base sm:text-lg font-heading font-extrabold text-white">Historial de Versiones</h3>
+                        <p id="history-modal-subtitle" class="text-xs text-slate-400">Consulta las iteraciones, notas y comentarios guardados de este prompt.</p>
+                    </div>
+                </div>
+                <button onclick="closePromptHistoryModal()" class="text-slate-400 hover:text-white transition p-1 text-xl">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <!-- TIMELINE LIST CONTAINER -->
+            <div id="history-versions-list" class="overflow-y-auto space-y-3.5 pr-1 flex-grow max-h-[58vh]">
+                <!-- Filled dynamically by renderPromptHistoryTimeline() -->
+            </div>
+
+            <!-- FOOTER -->
+            <div class="pt-3 border-t border-slate-800 flex justify-between items-center shrink-0">
+                <span id="history-version-count-summary" class="text-xs font-mono text-slate-400"></span>
+                <button onclick="closePromptHistoryModal()" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 px-4 py-2 rounded-xl border border-slate-700 transition">
+                    Cerrar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- POP-UP FLOTANTE CON EL CONTENIDO COMPLETO DE LA VERSIÓN ACTIVA AL PASAR EL CURSOR (HOVER) -->
+    <div id="save-target-hover-popup"
+        class="hidden fixed z-[9999] max-h-[85vh] overflow-y-auto p-4 rounded-2xl bg-slate-950/95 border border-emerald-500/80 shadow-2xl backdrop-blur-2xl text-xs space-y-3 pointer-events-none transition-opacity duration-150">
+        <!-- Populated dynamically on hover -->
+    </div>
 
 </body>
 

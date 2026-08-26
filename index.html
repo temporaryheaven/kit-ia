@@ -1,3 +1,4 @@
+<!-- Version: 1.0 -->
 <!DOCTYPE html>
 <html lang="es" class="scroll-smooth">
 
@@ -233,7 +234,13 @@
             </div>
 
             <!-- ACTIONS RIGHT -->
-            <div class="flex items-center space-x-3">
+            <div class="flex items-center space-x-2.5 sm:space-x-3">
+                <button onclick="openFeedbackModal()" id="btn-open-feedback"
+                    title="Proponer funcionalidades, mejoras o enviar feedback"
+                    class="bg-gradient-to-r from-purple-600/90 to-indigo-600/90 hover:from-purple-500 hover:to-indigo-500 text-white text-xs sm:text-sm px-3.5 py-2 rounded-xl border border-purple-400/30 flex items-center gap-2 transition duration-200 shadow-md shadow-purple-900/20 active:scale-95">
+                    <i class="fa-solid fa-comment-dots text-purple-200"></i>
+                    <span class="font-medium hidden sm:inline">Feedback</span>
+                </button>
                 <button onclick="toggleGlobalFullscreen()" title="Alternar Pantalla Completa (Tecla F)"
                     class="bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white text-xs px-3.5 py-2 rounded-xl border border-slate-700 flex items-center gap-2 transition duration-200 shadow-sm">
                     <i class="fa-solid fa-expand text-brand-400"></i>
@@ -1121,7 +1128,8 @@
                                 class="p-3 rounded-2xl bg-slate-950 border border-slate-800 flex justify-between items-center">
                                 <div>
                                     <strong class="text-amber-400 block text-xs sm:text-sm">Google Gemini</strong>
-                                    <span class="text-slate-400 text-xs">Ventana de contexto masiva, análisis de PDFs y multimodalidad.</span>
+                                    <span class="text-slate-400 text-xs">Ventana de contexto masiva, análisis de PDFs y
+                                        multimodalidad.</span>
                                 </div>
                                 <span
                                     class="text-[10px] font-mono bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded">Multimodal</span>
@@ -3391,6 +3399,17 @@ Devuelve ÚNICAMENTE el bloque JSON.`;
         }
 
         document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                closeFeedbackModal();
+                closeApiConfigModal();
+                closeAIDiagnosisModal();
+                closeSavePromptModal();
+                closePromptBankModal();
+                closeRestoreModal();
+                closePromptHistoryModal();
+                return;
+            }
+
             if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) {
                 return;
             }
@@ -3424,6 +3443,10 @@ Devuelve ÚNICAMENTE el bloque JSON.`;
         const GDRIVE_CLIENT_ID = '260774404794-5qo9f3p1lianbgmjaolgqsvg9mn6i7ik.apps.googleusercontent.com';
         const GDRIVE_BACKUP_FILENAME = 'Kit_IA_Docentes_TCREI_Backup.json';
         const GDRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
+
+        // URL del Web App de Google Apps Script para Feedback y Alertas por Email
+        // (Reemplazar con la URL generada en Google Apps Script según GUIA_CONFIGURACION_GOOGLE_SHEETS.md)
+        const GOOGLE_SCRIPT_FEEDBACK_URL = 'https://script.google.com/macros/s/AKfycbwHWcEkcYT4Gv9myL4fP_Wh-OXqXkb1IrEfue6uTvhx62znJj8DSO9YbG5QDf0zXM9K0g/exec';
 
         let gdriveTokenClient = null;
         let gdriveAccessToken = null;
@@ -5242,6 +5265,165 @@ ${ver.iter || '[Prompt de 2ª iteración / Reprompting]'}`;
             buildPrompt();
             updatePromptBankCounterBadge();
         };
+
+        // =============================================================
+        // 18. USER FEEDBACK & FEATURE PROPOSALS CONTROLLER
+        // =============================================================
+        function openFeedbackModal() {
+            const modal = document.getElementById('modal-feedback');
+            if (!modal) return;
+
+            // Reset status banner
+            const statusBanner = document.getElementById('feedback-status-banner');
+            if (statusBanner) {
+                statusBanner.className = 'hidden p-3.5 rounded-xl text-xs flex items-center gap-2.5';
+                statusBanner.innerHTML = '';
+            }
+
+            // Update contextual indicator badge
+            const contextEl = document.getElementById('feedback-context-indicator');
+            if (contextEl) {
+                let tabName = 'Presentación';
+                if (activeTab === 'infographic') tabName = 'Infografía';
+                else if (activeTab === 'generator') tabName = 'Diseñador TCREI';
+                else if (activeTab === 'prompts') tabName = 'Banco por Familias';
+                else if (activeTab === 'cheatsheet') tabName = 'Cheat Sheet & RGPD';
+
+                let slideInfo = activeTab === 'presentation' ? `Diapositiva: ${currentSlideIndex + 1}/8` : 'N/A';
+                contextEl.textContent = `Pestaña: ${tabName} • ${slideInfo}`;
+            }
+
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+
+            // Focus on subject field after opening
+            setTimeout(() => {
+                const subjectInput = document.getElementById('feedback-subject');
+                if (subjectInput) subjectInput.focus();
+            }, 100);
+        }
+
+        function closeFeedbackModal() {
+            const modal = document.getElementById('modal-feedback');
+            if (!modal) return;
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        function handleFeedbackBackdropClick(event) {
+            if (event.target && event.target.id === 'modal-feedback') {
+                closeFeedbackModal();
+            }
+        }
+
+        async function handleFeedbackSubmit(event) {
+            event.preventDefault();
+
+            const typeEl = document.getElementById('feedback-type');
+            const subjectEl = document.getElementById('feedback-subject');
+            const messageEl = document.getElementById('feedback-message');
+            const emailEl = document.getElementById('feedback-email');
+            const statusBanner = document.getElementById('feedback-status-banner');
+            const submitBtn = document.getElementById('btn-submit-feedback');
+            const submitBtnText = document.getElementById('btn-submit-feedback-text');
+
+            if (!typeEl || !subjectEl || !messageEl || !submitBtn) return;
+
+            const feedbackType = typeEl.value;
+            const subject = subjectEl.value.trim();
+            const message = messageEl.value.trim();
+            const email = emailEl ? emailEl.value.trim() : '';
+
+            if (!subject || !message) {
+                showToast("Campos Incompletos", "Por favor completa el asunto y el mensaje.", "trash");
+                return;
+            }
+
+            // Tab human-readable name
+            let tabName = activeTab;
+            if (activeTab === 'presentation') tabName = 'Presentación Interactiva';
+            else if (activeTab === 'infographic') tabName = 'Infografía Resumen';
+            else if (activeTab === 'generator') tabName = 'Diseñador TCREI';
+            else if (activeTab === 'prompts') tabName = 'Banco por Familias';
+            else if (activeTab === 'cheatsheet') tabName = 'Cheat Sheet & RGPD';
+
+            const payload = {
+                type: 'feedback',
+                feedbackType: feedbackType,
+                subject: subject,
+                message: message,
+                email: email || 'No proporcionado',
+                context: {
+                    activeTab: tabName,
+                    currentSlide: activeTab === 'presentation' ? (currentSlideIndex + 1) : 'N/A',
+                    configuredProvider: localStorage.getItem('tcrei_api_provider') || 'No configurado',
+                    userAgent: navigator.userAgent
+                },
+                submittedAt: new Date().toISOString()
+            };
+
+            // Set loading state
+            submitBtn.disabled = true;
+            submitBtn.classList.add('opacity-75', 'cursor-not-allowed');
+            if (submitBtnText) submitBtnText.textContent = 'Enviando...';
+
+            if (statusBanner) {
+                statusBanner.className = 'p-3.5 rounded-xl text-xs flex items-center gap-2.5 bg-purple-500/10 border border-purple-500/30 text-purple-200';
+                statusBanner.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin text-purple-400"></i> Enviando aportación al administrador...';
+            }
+
+            try {
+                if (!GOOGLE_SCRIPT_FEEDBACK_URL || GOOGLE_SCRIPT_FEEDBACK_URL.trim() === '') {
+                    // Simulación / Modo demostración si la URL no está enlazada todavía
+                    console.warn("GOOGLE_SCRIPT_FEEDBACK_URL no está configurado. Simulación:", payload);
+                    await new Promise(resolve => setTimeout(resolve, 800));
+
+                    if (statusBanner) {
+                        statusBanner.className = 'p-3.5 rounded-xl text-xs flex items-center gap-2.5 bg-amber-500/10 border border-amber-500/30 text-amber-200';
+                        statusBanner.innerHTML = '<i class="fa-solid fa-circle-check text-amber-400"></i> ¡Feedback registrado localmente! (Configura <code>GOOGLE_SCRIPT_FEEDBACK_URL</code> para conectarlo con Google Sheets y alertas por email).';
+                    }
+                    showToast("Feedback Recibido", "¡Gracias por tu colaboración para mejorar la herramienta!", "bolt");
+                } else {
+                    // Envío real mediante POST al Web App de Google Apps Script
+                    await fetch(GOOGLE_SCRIPT_FEEDBACK_URL, {
+                        method: 'POST',
+                        mode: 'no-cors', // Evita problemas de CORS con Google Apps Script
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (statusBanner) {
+                        statusBanner.className = 'p-3.5 rounded-xl text-xs flex items-center gap-2.5 bg-emerald-500/10 border border-emerald-500/30 text-emerald-200';
+                        statusBanner.innerHTML = '<i class="fa-solid fa-circle-check text-emerald-400"></i> ¡Aportación enviada con éxito! Muchas gracias por colaborar en la mejora del Kit.';
+                    }
+                    showToast("Feedback Enviado", "Tu mensaje ha sido guardado y notificado al administrador.", "check");
+                }
+
+                // Reset form fields
+                if (subjectEl) subjectEl.value = '';
+                if (messageEl) messageEl.value = '';
+                if (emailEl) emailEl.value = '';
+
+                // Close modal after delay
+                setTimeout(() => {
+                    closeFeedbackModal();
+                }, 2200);
+
+            } catch (err) {
+                console.error("Feedback Submission Error:", err);
+                if (statusBanner) {
+                    statusBanner.className = 'p-3.5 rounded-xl text-xs flex items-center gap-2.5 bg-rose-500/10 border border-rose-500/30 text-rose-200';
+                    statusBanner.innerHTML = `<i class="fa-solid fa-circle-exclamation text-rose-400"></i> Error al enviar: ${err.message || 'Error de conexión'}. Inténtalo de nuevo más tarde.`;
+                }
+                showToast("Error de Envío", "No se pudo entregar el feedback.", "trash");
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.classList.remove('opacity-75', 'cursor-not-allowed');
+                if (submitBtnText) submitBtnText.textContent = 'Enviar Aportación';
+            }
+        }
     </script>
     <!-- ================================================================= -->
     <!-- MODAL 1: CONFIGURACIÓN DE API KEY PARA MODELOS DE IA              -->
@@ -5457,7 +5639,8 @@ ${ver.iter || '[Prompt de 2ª iteración / Reprompting]'}`;
             </div>
 
             <!-- MODE SWITCHER TABS (NUEVO PROMPT VS NUEVA VERSIÓN) -->
-            <div id="save-prompt-mode-tabs" class="grid grid-cols-2 p-1 bg-slate-900/90 rounded-2xl border border-slate-800 text-xs">
+            <div id="save-prompt-mode-tabs"
+                class="grid grid-cols-2 p-1 bg-slate-900/90 rounded-2xl border border-slate-800 text-xs">
                 <button type="button" id="save-mode-tab-new" onclick="setSavePromptMode('new_prompt')"
                     class="py-2 px-3 rounded-xl font-heading font-bold transition flex items-center justify-center gap-1.5 bg-emerald-600 text-white shadow-md">
                     <i class="fa-solid fa-plus text-xs"></i>
@@ -5504,7 +5687,8 @@ ${ver.iter || '[Prompt de 2ª iteración / Reprompting]'}`;
                         <span>Comentario de la Versión:</span>
                         <span class="text-[10px] text-emerald-400 font-normal">Metadato de la versión</span>
                     </label>
-                    <input type="text" id="save-prompt-version-comment" placeholder="Ej: Versión inicial con restricciones de seguridad de taller"
+                    <input type="text" id="save-prompt-version-comment"
+                        placeholder="Ej: Versión inicial con restricciones de seguridad de taller"
                         class="w-full p-3 bg-slate-950 border border-emerald-500/40 rounded-xl text-slate-200 focus:ring-2 focus:ring-emerald-500 focus:outline-none text-xs">
                 </div>
 
@@ -5539,7 +5723,8 @@ ${ver.iter || '[Prompt de 2ª iteración / Reprompting]'}`;
                 <div class="space-y-1.5 relative">
                     <label class="font-heading font-bold text-slate-300 flex items-center justify-between">
                         <span>Selecciona el Prompt Existente:</span>
-                        <span class="text-[10px] text-emerald-400 font-normal">Pasa el cursor para ver el contenido</span>
+                        <span class="text-[10px] text-emerald-400 font-normal">Pasa el cursor para ver el
+                            contenido</span>
                     </label>
 
                     <!-- Hidden input que almacena el ID del prompt seleccionado -->
@@ -5562,7 +5747,8 @@ ${ver.iter || '[Prompt de 2ª iteración / Reprompting]'}`;
                 </div>
 
                 <!-- INFO DE LA VERSIÓN QUE SE VA A CREAR -->
-                <div id="save-prompt-target-info" class="p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-2">
+                <div id="save-prompt-target-info"
+                    class="p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-2">
                     <!-- Populated dynamically -->
                 </div>
 
@@ -5585,7 +5771,8 @@ ${ver.iter || '[Prompt de 2ª iteración / Reprompting]'}`;
                 </button>
                 <button onclick="submitSavePrompt()" id="save-prompt-submit-btn"
                     class="text-xs bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-heading font-bold px-5 py-2.5 rounded-xl transition shadow-lg shadow-emerald-600/30 flex items-center gap-1.5 active:scale-95">
-                    <i class="fa-solid fa-floppy-disk"></i> <span id="save-prompt-submit-text">Guardar en Mi Banco</span>
+                    <i class="fa-solid fa-floppy-disk"></i> <span id="save-prompt-submit-text">Guardar en Mi
+                        Banco</span>
                 </button>
             </div>
         </div>
@@ -5614,7 +5801,8 @@ ${ver.iter || '[Prompt de 2ª iteración / Reprompting]'}`;
                                 class="text-xs font-mono font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">0
                                 guardados</span>
                         </div>
-                        <p class="text-xs text-slate-400 mt-0.5">Colección persistente de prompts TCREI con historial de versiones para tus
+                        <p class="text-xs text-slate-400 mt-0.5">Colección persistente de prompts TCREI con historial de
+                            versiones para tus
                             módulos formativos.</p>
                     </div>
                 </div>
@@ -5645,7 +5833,8 @@ ${ver.iter || '[Prompt de 2ª iteración / Reprompting]'}`;
                 <div class="flex flex-wrap items-center gap-2 shrink-0">
                     <!-- EXPORT DROPDOWN (JSON / MARKDOWN / TEXTO PLANO) -->
                     <div class="relative inline-block text-left" id="export-dropdown-wrapper">
-                        <button onclick="toggleExportDropdown(event)" id="export-dropdown-btn" title="Exportar banco de prompts en diferentes formatos"
+                        <button onclick="toggleExportDropdown(event)" id="export-dropdown-btn"
+                            title="Exportar banco de prompts en diferentes formatos"
                             class="text-xs bg-slate-900 hover:bg-slate-800 text-sky-300 hover:text-white px-3 py-2 rounded-xl border border-slate-700 transition flex items-center gap-1.5 active:scale-95">
                             <i class="fa-solid fa-download text-sky-400"></i>
                             <span>Exportar</span>
@@ -5710,7 +5899,8 @@ ${ver.iter || '[Prompt de 2ª iteración / Reprompting]'}`;
             <!-- FOOTER -->
             <div class="pt-3 border-t border-slate-800 flex justify-between items-center gap-3 shrink-0">
                 <span class="text-[11px] text-slate-500 hidden sm:inline">
-                    <i class="fa-solid fa-shield-halved text-emerald-400"></i> Todos los prompts y versiones se guardan localmente
+                    <i class="fa-solid fa-shield-halved text-emerald-400"></i> Todos los prompts y versiones se guardan
+                    localmente
                     en tu navegador de forma privada.
                 </span>
                 <div class="flex items-center gap-2 ml-auto">
@@ -5777,7 +5967,8 @@ ${ver.iter || '[Prompt de 2ª iteración / Reprompting]'}`;
                         <span class="font-heading font-bold text-emerald-400 flex items-center gap-1.5">
                             <i class="fa-solid fa-code-merge"></i> Combinar (Merge)
                         </span>
-                        <p class="text-[11px] text-slate-400 group-hover:text-slate-300">Conserva tus prompts y versiones actuales y
+                        <p class="text-[11px] text-slate-400 group-hover:text-slate-300">Conserva tus prompts y
+                            versiones actuales y
                             añade los nuevos del backup.</p>
                     </button>
                     <button onclick="executeRestore('overwrite')"
@@ -5811,15 +6002,20 @@ ${ver.iter || '[Prompt de 2ª iteración / Reprompting]'}`;
             <!-- HEADER -->
             <div class="flex justify-between items-center border-b border-slate-800 pb-3 shrink-0">
                 <div class="flex items-center gap-3">
-                    <div class="w-10 h-10 rounded-2xl bg-sky-500/20 border border-sky-500/40 text-sky-400 flex items-center justify-center text-lg">
+                    <div
+                        class="w-10 h-10 rounded-2xl bg-sky-500/20 border border-sky-500/40 text-sky-400 flex items-center justify-center text-lg">
                         <i class="fa-solid fa-clock-rotate-left"></i>
                     </div>
                     <div>
-                        <h3 id="history-modal-title" class="text-base sm:text-lg font-heading font-extrabold text-white">Historial de Versiones</h3>
-                        <p id="history-modal-subtitle" class="text-xs text-slate-400">Consulta las iteraciones, notas y comentarios guardados de este prompt.</p>
+                        <h3 id="history-modal-title"
+                            class="text-base sm:text-lg font-heading font-extrabold text-white">Historial de Versiones
+                        </h3>
+                        <p id="history-modal-subtitle" class="text-xs text-slate-400">Consulta las iteraciones, notas y
+                            comentarios guardados de este prompt.</p>
                     </div>
                 </div>
-                <button onclick="closePromptHistoryModal()" class="text-slate-400 hover:text-white transition p-1 text-xl">
+                <button onclick="closePromptHistoryModal()"
+                    class="text-slate-400 hover:text-white transition p-1 text-xl">
                     <i class="fa-solid fa-xmark"></i>
                 </button>
             </div>
@@ -5832,10 +6028,122 @@ ${ver.iter || '[Prompt de 2ª iteración / Reprompting]'}`;
             <!-- FOOTER -->
             <div class="pt-3 border-t border-slate-800 flex justify-between items-center shrink-0">
                 <span id="history-version-count-summary" class="text-xs font-mono text-slate-400"></span>
-                <button onclick="closePromptHistoryModal()" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 px-4 py-2 rounded-xl border border-slate-700 transition">
+                <button onclick="closePromptHistoryModal()"
+                    class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 px-4 py-2 rounded-xl border border-slate-700 transition">
                     Cerrar
                 </button>
             </div>
+        </div>
+    </div>
+
+    <!-- ================================================================= -->
+    <!-- MODAL 7: FEEDBACK, PROPUESTAS DE MEJORA Y CONTACTO               -->
+    <!-- ================================================================= -->
+    <div id="modal-feedback"
+        class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md hidden items-center justify-center p-3 sm:p-6 overflow-y-auto"
+        onclick="handleFeedbackBackdropClick(event)">
+        <div class="glass-panel-dark max-w-xl w-full p-6 sm:p-8 rounded-3xl border border-slate-700 shadow-2xl space-y-5 my-auto"
+            onclick="event.stopPropagation()">
+
+            <!-- HEADER -->
+            <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+                <div class="flex items-center gap-3">
+                    <div
+                        class="w-10 h-10 rounded-2xl bg-purple-500/20 border border-purple-500/40 text-purple-400 flex items-center justify-center text-lg shrink-0">
+                        <i class="fa-solid fa-comment-dots"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-lg font-heading font-extrabold text-white flex items-center gap-2">
+                            Feedback y Sugerencias
+                        </h3>
+                        <p class="text-xs text-slate-400">Propón nuevas funciones, mejoras o comparte tus comentarios
+                            con el administrador.</p>
+                    </div>
+                </div>
+                <button onclick="closeFeedbackModal()" class="text-slate-400 hover:text-white transition p-1 text-xl">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <!-- FORM -->
+            <form id="feedback-form" onsubmit="handleFeedbackSubmit(event)" class="space-y-4 text-xs sm:text-sm">
+
+                <!-- TIPO DE APORTACIÓN -->
+                <div class="space-y-1">
+                    <label class="font-heading font-bold text-slate-300 flex items-center gap-1.5">
+                        <i class="fa-solid fa-tag text-purple-400"></i> Tipo de Aportación:
+                    </label>
+                    <select id="feedback-type" required
+                        class="w-full p-3 bg-slate-950 border border-slate-700 rounded-xl text-slate-200 focus:ring-2 focus:ring-purple-500 focus:outline-none transition">
+                        <option value="Nueva Funcionalidad">💡 Nueva Funcionalidad / Propuesta de Función</option>
+                        <option value="Mejora o Cambio">🛠️ Mejora o Cambio en Contenidos / Metodología</option>
+                        <option value="Reporte de Error">🐛 Reporte de Error o Fallo Técnico</option>
+                        <option value="Comentario General" selected>💬 Comentario o Valoración General</option>
+                    </select>
+                </div>
+
+                <!-- ASUNTO -->
+                <div class="space-y-1">
+                    <label class="font-heading font-bold text-slate-300 flex items-center gap-1.5">
+                        <i class="fa-solid fa-heading text-sky-400"></i> Asunto / Título Breve:
+                    </label>
+                    <input type="text" id="feedback-subject" required
+                        placeholder="Ej: Añadir opción para exportar en Markdown"
+                        class="w-full p-3 bg-slate-950 border border-slate-700 rounded-xl text-slate-200 placeholder-slate-500 focus:ring-2 focus:ring-purple-500 focus:outline-none transition">
+                </div>
+
+                <!-- MENSAJE -->
+                <div class="space-y-1">
+                    <label class="font-heading font-bold text-slate-300 flex items-center gap-1.5">
+                        <i class="fa-solid fa-align-left text-emerald-400"></i> Mensaje o Descripción Detallada:
+                    </label>
+                    <textarea id="feedback-message" required rows="4"
+                        placeholder="Explica tu idea, sugerencia o detalle del problema con el mayor detalle posible..."
+                        class="w-full p-3 bg-slate-950 border border-slate-700 rounded-xl text-slate-200 placeholder-slate-500 focus:ring-2 focus:ring-purple-500 focus:outline-none transition resize-none"></textarea>
+                </div>
+
+                <!-- EMAIL (OPCIONAL) -->
+                <div class="space-y-1">
+                    <div class="flex justify-between items-center">
+                        <label class="font-heading font-bold text-slate-300 flex items-center gap-1.5">
+                            <i class="fa-solid fa-envelope text-amber-400"></i> Tu Correo Electrónico:
+                        </label>
+                        <span class="text-[11px] text-slate-500 font-medium">Opcional (para recibir respuesta)</span>
+                    </div>
+                    <input type="email" id="feedback-email" placeholder="docente@ejemplo.es"
+                        class="w-full p-3 bg-slate-950 border border-slate-700 rounded-xl text-slate-200 placeholder-slate-500 focus:ring-2 focus:ring-purple-500 focus:outline-none transition">
+                </div>
+
+                <!-- CONTEXT INFO BADGE -->
+                <div
+                    class="p-3 bg-slate-950/70 border border-slate-800 rounded-xl flex items-center justify-between text-[11px] text-slate-400">
+                    <div class="flex items-center gap-2">
+                        <i class="fa-solid fa-circle-info text-sky-400"></i>
+                        <span>Contexto detectado:</span>
+                    </div>
+                    <div id="feedback-context-indicator" class="font-mono text-slate-300 truncate max-w-[280px]">
+                        Pestaña: Presentación • Diapositiva: 1
+                    </div>
+                </div>
+
+                <!-- STATUS MESSAGE BANNER -->
+                <div id="feedback-status-banner" class="hidden p-3.5 rounded-xl text-xs flex items-center gap-2.5">
+                    <!-- Populated dynamically -->
+                </div>
+
+                <!-- ACTIONS -->
+                <div class="pt-3 border-t border-slate-800 flex justify-end gap-3 items-center">
+                    <button type="button" onclick="closeFeedbackModal()"
+                        class="text-xs text-slate-400 hover:text-white px-4 py-2.5 rounded-xl hover:bg-slate-800/80 transition">
+                        Cancelar
+                    </button>
+                    <button type="submit" id="btn-submit-feedback"
+                        class="text-xs sm:text-sm bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-heading font-bold px-5 py-2.5 rounded-xl transition shadow-lg shadow-indigo-600/25 flex items-center gap-2 active:scale-95">
+                        <i class="fa-solid fa-paper-plane"></i>
+                        <span id="btn-submit-feedback-text">Enviar Aportación</span>
+                    </button>
+                </div>
+            </form>
         </div>
     </div>
 

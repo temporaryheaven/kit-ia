@@ -1,8 +1,8 @@
 # 🎓 Kit de IA para Docentes de Formación Profesional (FP + IA)
 ### *Marco TCREI para la Creación de Recursos Didácticos y Prácticas de Taller con Inteligencia Artificial*
 
-![Versión](https://img.shields.io/badge/Versión-2.1.0-blue.svg)
-![Tecnologías](https://img.shields.io/badge/Tecnologías-HTML5%20|%20TailwindCSS%20|%20JavaScript%20ES6+-emerald.svg)
+![Versión](https://img.shields.io/badge/Versión-1.3.0-blue.svg)
+![Tecnologías](https://img.shields.io/badge/Tecnologías-HTML5%20|%20TailwindCSS%20|%20JavaScript%20ES%20Modules-emerald.svg)
 ![Diseño](https://img.shields.io/badge/UI/UX-Glassmorphism%20&%20Dark%20Glow-purple.svg)
 ![Enfoque](https://img.shields.io/badge/Enfoque-Formación%20Profesional%20y%20Adultos-orange.svg)
 ![Licencia](https://img.shields.io/badge/Licencia-Educativa%20Abierta-purple.svg)
@@ -11,7 +11,7 @@
 
 ## 📌 Descripción General
 
-El **Kit de IA para Docentes de Formación Profesional** es una plataforma web interactiva de última generación (*single-file application*) concebida como entorno integral de capacitación y herramienta práctica de trabajo para el profesorado de FP y formación de adultos.
+El **Kit de IA para Docentes de Formación Profesional** es una plataforma web interactiva de última generación concebida como entorno integral de capacitación y herramienta práctica de trabajo para el profesorado de FP y formación de adultos.
 
 Su meta principal es transformar la manera en que los docentes interactúan con modelos de lenguaje e inteligencias artificiales generativas (ChatGPT, Claude, Microsoft Copilot, Gemini, DeepSeek, etc.), dotándolos de un método sistemático denominado **Marco TCREI** (*Tarea, Contexto, Referencias, Evaluar, Iterar*). Este método permite superar el principio **GIGO** (*Garbage In, Garbage Out*) para generar borradores de alta fidelidad: simulaciones de averías en taller, hojas de proceso y despiece, casos clínicos y rúbricas analíticas listas para el aula técnica.
 
@@ -90,7 +90,8 @@ La aplicación se compone de 5 herramientas principales accesibles mediante la b
   - 🟦 **Botón "Auditoría IA (T-C-R)":** Evalúa **exclusivamente la fase de entrada inicial** (sin penalizar ni exigir las fases 4 y 5, que corresponden al control posterior *Human-in-the-Loop*).
   - 🟪 **Botón "Auditoría IA (E-I)":** Evalúa **exclusivamente la guía de auditoría docente y el reprompting** (prevención de riesgos, imprevistos simulados, detección de alucinaciones y atención a la diversidad).
   - Conexión directa (*Bring Your Own Key*) a **Google Gemini** (Gemini 2.5/3.7 Flash), **OpenAI**, **Anthropic Claude**, **DeepSeek** y **Groq** *(Ver guía detallada en [GUIA_CONFIGURACION_APIS.md](file:///home/carlos/AI/Kit_IA_Docentes/GUIA_CONFIGURACION_APIS.md))*.
-  - Modal contextual con informe de fortalezas didácticas, riesgos técnicos de taller y botón **"Aplicar Entrada / Control Optimizado"** sin sobreescribir la otra fase.
+  - **Modal Interactivo con Pestañas y Comparador Diff:** Informe de diagnóstico pedagógico junto con una pestaña dedicada a la revisión y edición de la propuesta optimizada. Incluye vista paralela editable y comparador visual de diferencias (`<ins>` y `<del>`) con opción de restablecimiento.
+  - Botón **"Aplicar Versión Optimizada en el Diseñador"** que traslada fielmente los textos revisados o editados por el docente a los campos de TCREI Designer.
 - **Generadores de Meta-Prompt de Auto-Auditoría (T-C-R y E-I):** Instrucciones específicas para evaluar cada fase en interfaces web sin necesidad de API keys.
 - **Botones de Copiado Independientes (Doble Fase):**
   - `Copiar Fases 1-3 (T-C-R)` para enviar la instrucción inicial al modelo de IA.
@@ -132,24 +133,49 @@ Colección completa de plantillas probadas y estructuradas con comparativas de *
 
 ## 🛠️ Tecnologías y Arquitectura
 
-El proyecto está diseñado bajo una arquitectura *Zero-Dependency Build* (sin necesidad de compiladores pesados ni dependencias complejas):
+El proyecto está diseñado bajo una arquitectura modular desacoplada con **módulos ES6 nativos** (`type="module"`), garantizando mantenibilidad, separación limpia de responsabilidades y cero dependencias de empaquetado (*Zero-Build Architecture*):
 
-- **HTML5 Semántico:** Estructura modular, accesible y optimizada.
+- **HTML5 Semántico:** Vistas y modales limpios y accesibles.
 - **Tailwind CSS (vía CDN):** Sistema de diseño responsivo con estética *glassmorphism*, fondos con gradientes radiales e iluminación ambiental (*mesh glow*).
-- **JavaScript Vanilla (ES6+):** Gestión reactiva de estado (navegación por diapositivas, motor de cálculo de completitud, versionado jerárquico de prompts, filtrado dinámico, cronómetro y notificaciones *toast*).
-- **Tipografías Web:** *Plus Jakarta Sans* (encabezados), *Inter* (cuerpo de texto) y *JetBrains Mono* (código y prompts).
-- **FontAwesome 6:** Iconografía técnica moderna.
-- **CSS Print Optimization:** Reglas específicas para exportar a PDF o imprimir sin elementos de interfaz redundantes.
+- **CSS Modular (`css/styles.css`):** Animaciones, temas claro/oscuro, microinteracciones y reglas de optimización para impresión (`@media print`).
+- **JavaScript ES Modules (`js/`):** Arquitectura modular dividida en:
+  - `js/config.js`: Parámetros de versión, constantes de almacenamiento y endpoints.
+  - `js/data/`: Datos de diapositivas y familias profesionales INCUAL.
+  - `js/core/`: Gestión centralizada de estado, temas, utilidades y notificaciones toast.
+  - `js/modules/`: Funcionalidades desacopladas (Diseñador TCREI, Auditoría IA, Banco de Prompts, Historial de Versiones, Sincronización y Feedback).
+  - `js/app.js`: Orquestador e inicializador principal.
 
 ```
 Kit_IA_Docentes/
-├── index.html                           # Aplicación web completa interactiva (HTML5 + TailwindCSS + JS)
-├── favicon.svg                          # Icono de la aplicación
-├── GUIA_CONFIGURACION_APIS.md           # Guía para obtener claves gratuitas de Gemini, OpenAI, Claude, DeepSeek y Groq
+├── index.html                           # Entrada principal (HTML5 + TailwindCSS)
+├── favicon.svg                          # Icono vectorial de la aplicación
+├── css/
+│   └── styles.css                       # Hoja de estilos desacoplada (temas, animaciones, print)
+├── js/
+│   ├── config.js                        # Constantes de versión, endpoints y storage keys
+│   ├── app.js                           # Punto de entrada y orquestador de la aplicación
+│   ├── data/
+│   │   ├── slides-data.js               # Contenido y esquemas SVG de las 8 diapositivas
+│   │   └── incual-families.js           # 28 familias profesionales INCUAL y prompts base
+│   ├── core/
+│   │   ├── state.js                     # Estado centralizado reactivo
+│   │   ├── theme.js                     # Gestor de temas claro / oscuro
+│   │   ├── toast.js                     # Sistema de notificaciones toast
+│   │   └── utils.js                     # Utilidades comunes (escapeHtml, fechas)
+│   └── modules/
+│       ├── ui-helpers.js                # Navegación entre pestañas, fullscreen, atajos
+│       ├── presentation.js              # Diapositivas, cronómetro y filtros
+│       ├── generator.js                 # Diseñador TCREI y evaluador heurístico
+│       ├── ai-audit.js                  # Conexión con APIs IA y diagnóstico interactivo
+│       ├── prompt-bank.js               # Banco de prompts, persistencia y galería
+│       ├── prompt-history.js            # Historial de versiones y timeline
+│       ├── backup-sync.js               # Exportación/Importación y Google Drive OAuth
+│       └── feedback.js                  # Formulario de sugerencias y reporte de incidencias
+├── GUIA_CONFIGURACION_APIS.md           # Guía para obtener claves de Gemini, OpenAI, Claude, DeepSeek y Groq
 ├── GUIA_CONFIGURACION_GOOGLE_DRIVE.md   # Guía paso a paso para configurar Google Drive OAuth 2.0 y backup
-├── GUIA_CONFIGURACION_GOOGLE_SHEETS.md  # Guía para conectar el formulario de Feedback con Google Sheets y alertas por Email
-├── OPCIONES_MINIFICACION_PRODUCCION.md  # Opciones y recomendaciones para producción y empaquetado
-├── README.md                            # Documentación técnica y pedagógica completa
+├── GUIA_CONFIGURACION_GOOGLE_SHEETS.md  # Guía para conectar el formulario de Feedback con Google Sheets
+├── RELEASE_NOTES.md                     # Registro detallado de versiones y cambios
+└── README.md                            # Documentación técnica y pedagógica completa
 ```
 
 ---

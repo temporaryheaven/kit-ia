@@ -1,4 +1,4 @@
-<!-- Version: 1.0 -->
+<!-- Version: 1.2.0 -->
 <!DOCTYPE html>
 <html lang="es" class="scroll-smooth">
 
@@ -25,8 +25,22 @@
     <!-- Google Identity Services (GIS) for Google Drive Client-Side OAuth -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
 
+    <!-- Immediate Theme Initialization (Anti-Flicker) -->
+    <script>
+        (function () {
+            const savedTheme = localStorage.getItem('kit_ia_theme') || 'dark';
+            document.documentElement.setAttribute('data-theme', savedTheme);
+            if (savedTheme === 'light') {
+                document.documentElement.classList.add('light');
+            } else {
+                document.documentElement.classList.remove('light');
+            }
+        })();
+    </script>
+
     <script>
         tailwind.config = {
+            darkMode: 'class',
             theme: {
                 extend: {
                     fontFamily: {
@@ -71,6 +85,11 @@
         }
     </script>
     <style>
+        /* Smooth theme transition */
+        html, body, .glass-panel-dark, header, nav, main, section, input, select, textarea, button {
+            transition: background-color 0.25s ease, color 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
+        }
+
         /* Ambient gradient background & glassmorphism utilities */
         .bg-mesh {
             background-color: #080e1a;
@@ -108,9 +127,282 @@
         /* Active Navigation Tab */
         .nav-tab-btn.active {
             background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
-            color: #ffffff;
+            color: #ffffff !important;
             font-weight: 700;
             box-shadow: 0 4px 14px 0 rgba(2, 132, 199, 0.39);
+        }
+
+        /* ================================================================= */
+        /* LIGHT THEME RULES & OVERRIDES (data-theme="light")                 */
+        /* ================================================================= */
+        html[data-theme="light"] body {
+            background-color: #f8fafc !important;
+            color: #0f172a !important;
+        }
+
+        html[data-theme="light"] .bg-mesh {
+            background-color: #f8fafc !important;
+            background-image:
+                radial-gradient(at 0% 0%, rgba(2, 132, 199, 0.08) 0px, transparent 50%),
+                radial-gradient(at 100% 0%, rgba(139, 92, 246, 0.06) 0px, transparent 50%),
+                radial-gradient(at 50% 100%, rgba(16, 185, 129, 0.06) 0px, transparent 50%) !important;
+        }
+
+        html[data-theme="light"] .fixed.inset-0.pointer-events-none.z-0 {
+            opacity: 0.12 !important;
+        }
+
+        /* Header & Navigation */
+        html[data-theme="light"] header {
+            background-color: rgba(255, 255, 255, 0.9) !important;
+            border-bottom-color: rgba(226, 232, 240, 0.9) !important;
+            box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05) !important;
+        }
+
+        html[data-theme="light"] header h1,
+        html[data-theme="light"] header h1 span {
+            color: #0f172a !important;
+        }
+
+        html[data-theme="light"] header p {
+            color: #64748b !important;
+        }
+
+        html[data-theme="light"] nav {
+            border-top-color: rgba(226, 232, 240, 0.8) !important;
+        }
+
+        html[data-theme="light"] .nav-tab-btn:not(.active) {
+            color: #475569 !important;
+        }
+
+        html[data-theme="light"] .nav-tab-btn:not(.active):hover {
+            color: #0f172a !important;
+            background-color: rgba(241, 245, 249, 0.9) !important;
+        }
+
+        /* Glass Panels */
+        html[data-theme="light"] .glass-panel-dark {
+            background: rgba(255, 255, 255, 0.92) !important;
+            border-color: rgba(226, 232, 240, 0.9) !important;
+            box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.05), 0 4px 6px -4px rgba(0, 0, 0, 0.03) !important;
+            color: #0f172a !important;
+        }
+
+        /* Slate Overrides */
+        html[data-theme="light"] .bg-slate-950,
+        html[data-theme="light"] .bg-slate-950\/80,
+        html[data-theme="light"] .bg-slate-950\/85,
+        html[data-theme="light"] .bg-slate-950\/70,
+        html[data-theme="light"] .bg-slate-900,
+        html[data-theme="light"] .bg-slate-900\/90,
+        html[data-theme="light"] .bg-slate-900\/80,
+        html[data-theme="light"] .bg-slate-900\/60,
+        html[data-theme="light"] .bg-slate-900\/95 {
+            background-color: #ffffff !important;
+        }
+
+        html[data-theme="light"] .bg-slate-800,
+        html[data-theme="light"] .bg-slate-800\/80,
+        html[data-theme="light"] .bg-slate-800\/50,
+        html[data-theme="light"] .bg-slate-800\/40 {
+            background-color: #f1f5f9 !important;
+            color: #334155 !important;
+        }
+
+        html[data-theme="light"] .hover\:bg-slate-800:hover,
+        html[data-theme="light"] .hover\:bg-slate-700:hover {
+            background-color: #e2e8f0 !important;
+        }
+
+        html[data-theme="light"] .border-slate-800,
+        html[data-theme="light"] .border-slate-800\/80,
+        html[data-theme="light"] .border-slate-800\/50,
+        html[data-theme="light"] .border-slate-700,
+        html[data-theme="light"] .border-slate-700\/80,
+        html[data-theme="light"] .border-slate-600,
+        html[data-theme="light"] .border-white\/10 {
+            border-color: #e2e8f0 !important;
+        }
+
+        html[data-theme="light"] .text-white,
+        html[data-theme="light"] .text-slate-100,
+        html[data-theme="light"] .text-slate-200 {
+            color: #0f172a !important;
+        }
+
+        html[data-theme="light"] .text-slate-300 {
+            color: #334155 !important;
+        }
+
+        html[data-theme="light"] .text-slate-400 {
+            color: #64748b !important;
+        }
+
+        html[data-theme="light"] .text-slate-500 {
+            color: #94a3b8 !important;
+        }
+
+        html[data-theme="light"] .hover\:text-white:hover {
+            color: #0f172a !important;
+        }
+
+        /* High-Contrast Accent Texts in Light Mode */
+        html[data-theme="light"] .text-sky-300,
+        html[data-theme="light"] .text-sky-400 {
+            color: #0284c7 !important;
+        }
+
+        html[data-theme="light"] .text-emerald-300,
+        html[data-theme="light"] .text-emerald-400 {
+            color: #059669 !important;
+        }
+
+        html[data-theme="light"] .text-amber-300,
+        html[data-theme="light"] .text-amber-400 {
+            color: #d97706 !important;
+        }
+
+        html[data-theme="light"] .text-purple-300,
+        html[data-theme="light"] .text-purple-400 {
+            color: #7c3aed !important;
+        }
+
+        html[data-theme="light"] .text-rose-300,
+        html[data-theme="light"] .text-rose-400 {
+            color: #e11d48 !important;
+        }
+
+        html[data-theme="light"] .text-brand-300,
+        html[data-theme="light"] .text-brand-400 {
+            color: #0284c7 !important;
+        }
+
+        html[data-theme="light"] .text-accent-cyan {
+            color: #0891b2 !important;
+        }
+
+        html[data-theme="light"] .text-indigo-200,
+        html[data-theme="light"] .text-indigo-300 {
+            color: #4f46e5 !important;
+        }
+
+        /* Accent Boxes & Badges */
+        html[data-theme="light"] .bg-rose-950\/30,
+        html[data-theme="light"] .bg-rose-950\/40,
+        html[data-theme="light"] .bg-rose-500\/10 {
+            background-color: #fff1f2 !important;
+            border-color: #fecdd3 !important;
+        }
+
+        html[data-theme="light"] .bg-emerald-950\/30,
+        html[data-theme="light"] .bg-emerald-950\/40,
+        html[data-theme="light"] .bg-emerald-500\/10,
+        html[data-theme="light"] .bg-emerald-500\/20 {
+            background-color: #ecfdf5 !important;
+            border-color: #a7f3d0 !important;
+        }
+
+        html[data-theme="light"] .bg-sky-950\/30,
+        html[data-theme="light"] .bg-sky-950\/40,
+        html[data-theme="light"] .bg-sky-500\/10,
+        html[data-theme="light"] .bg-sky-500\/20,
+        html[data-theme="light"] .bg-brand-500\/10,
+        html[data-theme="light"] .bg-brand-500\/20 {
+            background-color: #f0f9ff !important;
+            border-color: #bae6fd !important;
+        }
+
+        html[data-theme="light"] .bg-amber-950\/30,
+        html[data-theme="light"] .bg-amber-950\/40,
+        html[data-theme="light"] .bg-amber-500\/10,
+        html[data-theme="light"] .bg-amber-500\/20 {
+            background-color: #fffbeb !important;
+            border-color: #fde68a !important;
+        }
+
+        html[data-theme="light"] .bg-purple-950\/30,
+        html[data-theme="light"] .bg-purple-950\/40,
+        html[data-theme="light"] .bg-purple-500\/10,
+        html[data-theme="light"] .bg-purple-500\/20 {
+            background-color: #faf5ff !important;
+            border-color: #e9d5ff !important;
+        }
+
+        /* Forms, Inputs, Selects */
+        html[data-theme="light"] input:not([type="checkbox"]):not([type="radio"]),
+        html[data-theme="light"] select,
+        html[data-theme="light"] textarea {
+            background-color: #ffffff !important;
+            color: #0f172a !important;
+            border-color: #cbd5e1 !important;
+        }
+
+        html[data-theme="light"] input::placeholder,
+        html[data-theme="light"] textarea::placeholder {
+            color: #94a3b8 !important;
+        }
+
+        /* Code, Pre & Monospace blocks */
+        html[data-theme="light"] code {
+            background-color: #f1f5f9 !important;
+            color: #0369a1 !important;
+        }
+
+        html[data-theme="light"] pre,
+        html[data-theme="light"] .font-mono.bg-slate-950,
+        html[data-theme="light"] .font-mono.bg-slate-900 {
+            background-color: #f8fafc !important;
+            color: #0f172a !important;
+            border-color: #e2e8f0 !important;
+        }
+
+        /* Speaker notes & Slide components */
+        html[data-theme="light"] #speaker-notes-box {
+            background: linear-gradient(to right, #fffbeb, #f8fafc) !important;
+            border-left-color: #f59e0b !important;
+            border-color: #fde68a !important;
+            color: #334155 !important;
+        }
+
+        html[data-theme="light"] #slide-dots-container {
+            background-color: rgba(241, 245, 249, 0.9) !important;
+            border-color: #e2e8f0 !important;
+        }
+
+        /* Modals & Popups */
+        html[data-theme="light"] .fixed.inset-0.bg-slate-950\/80,
+        html[data-theme="light"] .fixed.inset-0.bg-slate-950\/85 {
+            background-color: rgba(15, 23, 42, 0.45) !important;
+        }
+
+        html[data-theme="light"] #save-target-dropdown-menu,
+        html[data-theme="light"] #export-dropdown-menu {
+            background-color: rgba(255, 255, 255, 0.98) !important;
+            border-color: #cbd5e1 !important;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1) !important;
+        }
+
+        html[data-theme="light"] #save-target-hover-popup {
+            background-color: rgba(255, 255, 255, 0.98) !important;
+            border-color: #10b981 !important;
+            color: #0f172a !important;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.15) !important;
+        }
+
+        /* Toast Notifications */
+        html[data-theme="light"] #toast {
+            background-color: rgba(255, 255, 255, 0.98) !important;
+            border-color: #0284c7 !important;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1) !important;
+        }
+
+        html[data-theme="light"] #toast #toast-title {
+            color: #475569 !important;
+        }
+
+        html[data-theme="light"] #toast #toast-msg {
+            color: #0f172a !important;
         }
 
         /* Print / PDF Styling */
@@ -158,6 +450,18 @@
 
         ::-webkit-scrollbar-thumb:hover {
             background: rgba(148, 163, 184, 0.7);
+        }
+
+        html[data-theme="light"] ::-webkit-scrollbar-track {
+            background: rgba(241, 245, 249, 0.8) !important;
+        }
+
+        html[data-theme="light"] ::-webkit-scrollbar-thumb {
+            background: rgba(148, 163, 184, 0.6) !important;
+        }
+
+        html[data-theme="light"] ::-webkit-scrollbar-thumb:hover {
+            background: rgba(100, 116, 139, 0.8) !important;
         }
     </style>
 </head>
@@ -235,6 +539,12 @@
 
             <!-- ACTIONS RIGHT -->
             <div class="flex items-center space-x-2.5 sm:space-x-3">
+                <button onclick="toggleTheme()" id="btn-toggle-theme"
+                    title="Alternar Tema Claro / Oscuro"
+                    class="bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white text-xs sm:text-sm px-3.5 py-2 rounded-xl border border-slate-700 flex items-center gap-2 transition duration-200 shadow-sm active:scale-95">
+                    <i id="theme-toggle-icon" class="fa-solid fa-moon text-brand-400"></i>
+                    <span id="theme-toggle-text" class="font-medium hidden sm:inline">Modo Claro</span>
+                </button>
                 <button onclick="openFeedbackModal()" id="btn-open-feedback"
                     title="Proponer funcionalidades, mejoras o enviar feedback"
                     class="bg-gradient-to-r from-purple-600/90 to-indigo-600/90 hover:from-purple-500 hover:to-indigo-500 text-white text-xs sm:text-sm px-3.5 py-2 rounded-xl border border-purple-400/30 flex items-center gap-2 transition duration-200 shadow-md shadow-purple-900/20 active:scale-95">
@@ -374,8 +684,11 @@
                         <kbd
                             class="hidden md:inline px-2 py-0.5 bg-slate-800 rounded border border-slate-700 font-mono text-[11px] text-slate-300">F</kbd>
                     </div>
-                    <span class="font-mono text-slate-400">Pág. <span id="footer-slide-num"
-                            class="text-brand-400 font-bold">1</span> de 8</span>
+                    <div class="flex items-center gap-3">
+                        <span class="font-mono text-slate-400">Pág. <span id="footer-slide-num"
+                                class="text-brand-400 font-bold">1</span> de 8</span>
+                        <span class="font-mono text-[11px] text-slate-500 border-l border-slate-800 pl-3 app-version-label">v1.2.0</span>
+                    </div>
                 </div>
             </div>
         </section>
@@ -1185,12 +1498,20 @@
     <!-- ================================================================= -->
     <footer
         class="bg-slate-950 text-slate-500 py-8 border-t border-slate-800/80 text-center text-xs no-print relative z-10 w-full px-4 sm:px-8">
-        <div class="w-full space-y-2">
+        <div class="max-w-7xl mx-auto space-y-3">
+            <div class="flex flex-wrap items-center justify-center gap-2">
+                <span
+                    class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-900 border border-slate-800 text-slate-300 font-mono text-[11px] shadow-sm">
+                    <i class="fa-solid fa-code-branch text-brand-400"></i>
+                    <span>Versión:</span>
+                    <strong class="text-white app-version-label">v1.2.0</strong>
+                </span>
+            </div>
             <p class="text-slate-400 font-medium">Jornada Formativa: Uso Efectivo de la Inteligencia Artificial en
                 Formación Profesional y Educación de Adultos</p>
             <p>Diseñado para el Profesorado de FP • 28 Familias Profesionales del Catálogo Nacional de Estándares de
                 Competencias (INCUAL)</p>
-            <p class="text-[11px] text-slate-600">Soberanía Pedagógica Docente • Cumplimiento Normativo RGPD/LOPD</p>
+            <p class="text-[11px] text-slate-600">Soberanía Pedagógica Docente • Cumplimiento Normativo RGPD/LOPD • Marco TCREI • <span class="font-mono text-slate-500 app-version-label">v1.2.0</span></p>
         </div>
     </footer>
 
@@ -1198,6 +1519,21 @@
     <!-- JAVASCRIPT: DATA & APPLICATION LOGIC                              -->
     <!-- ================================================================= -->
     <script>
+        // =============================================================
+        // 0. GLOBAL APPLICATION CONSTANTS & VERSIONING
+        // =============================================================
+        const APP_VERSION = '1.2.0';
+
+        function updateAppVersionLabels() {
+            document.querySelectorAll('.app-version-label').forEach(el => {
+                el.innerText = `v${APP_VERSION}`;
+            });
+            document.querySelectorAll('.app-version-raw').forEach(el => {
+                el.innerText = APP_VERSION;
+            });
+        }
+        updateAppVersionLabels();
+
         // =============================================================
         // 1. SLIDE DECK DATA
         // =============================================================
@@ -2869,9 +3205,221 @@ INSTRUCCIONES DE AUDITORÍA:
         }
 
         // =============================================================
-        // 8.3 DUAL-PHASE AI DIAGNOSIS ENGINE & MODAL
+        // 8.3 DUAL-PHASE AI DIAGNOSIS ENGINE & MODAL WITH DIFF & EDIT
         // =============================================================
         let currentAuditPhase = 'phase1';
+        let currentAuditOriginal = {
+            task: '',
+            context: '',
+            ref: '',
+            eval: '',
+            iter: ''
+        };
+        let currentAuditActiveTab = 'analysis';
+        let currentAuditViewMode = 'split';
+
+        function computeWordDiff(textA, textB) {
+            const a = (textA || '').trim();
+            const b = (textB || '').trim();
+            if (!a && !b) return '<span class="text-slate-500 italic">(Campo vacío)</span>';
+            if (!a && b) {
+                return `<ins class="bg-emerald-500/25 text-emerald-300 no-underline rounded px-1 py-0.5 font-semibold">${escapeHtml(b)}</ins>`;
+            }
+            if (a && !b) {
+                return `<del class="bg-rose-500/25 text-rose-300 line-through rounded px-1 py-0.5 font-semibold">${escapeHtml(a)}</del>`;
+            }
+            if (a === b) {
+                return `<span class="text-slate-300">${escapeHtml(b)}</span> <span class="text-[10px] text-slate-500 italic ml-2">(Sin modificaciones)</span>`;
+            }
+
+            const tokensA = a.match(/[\w\u00C0-\u024F]+|[^\w\s\u00C0-\u024F]+|\s+/g) || [a];
+            const tokensB = b.match(/[\w\u00C0-\u024F]+|[^\w\s\u00C0-\u024F]+|\s+/g) || [b];
+
+            const n = tokensA.length;
+            const m = tokensB.length;
+
+            const maxTokens = 600;
+            if (n > maxTokens || m > maxTokens) {
+                return `<div class="space-y-1"><div class="text-rose-400 text-[11px]"><span class="font-bold">Original:</span> ${escapeHtml(a)}</div><div class="text-emerald-400 text-[11px]"><span class="font-bold">Optimizado:</span> ${escapeHtml(b)}</div></div>`;
+            }
+
+            const dp = Array.from({ length: n + 1 }, () => new Uint16Array(m + 1));
+            for (let i = 0; i < n; i++) {
+                for (let j = 0; j < m; j++) {
+                    if (tokensA[i] === tokensB[j]) {
+                        dp[i + 1][j + 1] = dp[i][j] + 1;
+                    } else {
+                        dp[i + 1][j + 1] = Math.max(dp[i + 1][j], dp[i][j + 1]);
+                    }
+                }
+            }
+
+            let i = n, j = m;
+            const diffPieces = [];
+            while (i > 0 || j > 0) {
+                if (i > 0 && j > 0 && tokensA[i - 1] === tokensB[j - 1]) {
+                    diffPieces.unshift({ type: 'same', val: tokensA[i - 1] });
+                    i--;
+                    j--;
+                } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
+                    diffPieces.unshift({ type: 'ins', val: tokensB[j - 1] });
+                    j--;
+                } else if (i > 0 && (j === 0 || dp[i][j - 1] < dp[i - 1][j])) {
+                    diffPieces.unshift({ type: 'del', val: tokensA[i - 1] });
+                    i--;
+                }
+            }
+
+            // Group consecutive items of same type
+            const grouped = [];
+            for (let k = 0; k < diffPieces.length; k++) {
+                const item = diffPieces[k];
+                if (grouped.length > 0 && grouped[grouped.length - 1].type === item.type) {
+                    grouped[grouped.length - 1].val += item.val;
+                } else {
+                    grouped.push({ type: item.type, val: item.val });
+                }
+            }
+
+            let html = '';
+            for (let k = 0; k < grouped.length; k++) {
+                const item = grouped[k];
+                const val = escapeHtml(item.val);
+                if (item.type === 'same') {
+                    html += val;
+                } else if (item.type === 'ins') {
+                    html += `<ins class="bg-emerald-500/25 text-emerald-300 no-underline rounded px-1 py-0.5 font-semibold">${val}</ins>`;
+                } else if (item.type === 'del') {
+                    html += `<del class="bg-rose-500/25 text-rose-300 line-through rounded px-1 py-0.5 font-semibold">${val}</del>`;
+                }
+            }
+            return html;
+        }
+
+        function switchDiagModalTab(tabKey) {
+            currentAuditActiveTab = tabKey;
+            const btnAnalysis = document.getElementById('diag-tab-btn-analysis');
+            const btnPreview = document.getElementById('diag-tab-btn-preview');
+            const contentAnalysis = document.getElementById('diag-tab-content-analysis');
+            const contentPreview = document.getElementById('diag-tab-content-preview');
+            const btnGotoPreview = document.getElementById('diag-btn-goto-preview');
+
+            if (tabKey === 'analysis') {
+                if (btnAnalysis) {
+                    btnAnalysis.className = "px-4 py-2.5 text-xs font-heading font-bold rounded-t-xl transition border-b-2 border-brand-500 text-white bg-slate-800/40 flex items-center gap-2";
+                }
+                if (btnPreview) {
+                    btnPreview.className = "px-4 py-2.5 text-xs font-heading font-bold rounded-t-xl transition border-b-2 border-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-800/20 flex items-center gap-2";
+                }
+                if (contentAnalysis) contentAnalysis.classList.remove('hidden');
+                if (contentPreview) contentPreview.classList.add('hidden');
+                if (btnGotoPreview) btnGotoPreview.classList.remove('hidden');
+            } else {
+                if (btnAnalysis) {
+                    btnAnalysis.className = "px-4 py-2.5 text-xs font-heading font-bold rounded-t-xl transition border-b-2 border-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-800/20 flex items-center gap-2";
+                }
+                if (btnPreview) {
+                    btnPreview.className = "px-4 py-2.5 text-xs font-heading font-bold rounded-t-xl transition border-b-2 border-emerald-500 text-white bg-slate-800/40 flex items-center gap-2";
+                }
+                if (contentAnalysis) contentAnalysis.classList.add('hidden');
+                if (contentPreview) contentPreview.classList.remove('hidden');
+                if (btnGotoPreview) btnGotoPreview.classList.add('hidden');
+            }
+
+            if (window.FontAwesome && window.FontAwesome.dom) window.FontAwesome.dom.i2svg();
+        }
+
+        function setDiagViewMode(mode) {
+            currentAuditViewMode = mode;
+            const splitBtn = document.getElementById('diag-viewmode-split-btn');
+            const diffBtn = document.getElementById('diag-viewmode-diff-btn');
+
+            if (mode === 'split') {
+                if (splitBtn) {
+                    splitBtn.className = "px-3 py-1 rounded-lg transition bg-brand-600 text-white flex items-center gap-1";
+                }
+                if (diffBtn) {
+                    diffBtn.className = "px-3 py-1 rounded-lg transition text-slate-400 hover:text-slate-200 flex items-center gap-1";
+                }
+            } else {
+                if (splitBtn) {
+                    splitBtn.className = "px-3 py-1 rounded-lg transition text-slate-400 hover:text-slate-200 flex items-center gap-1";
+                }
+                if (diffBtn) {
+                    diffBtn.className = "px-3 py-1 rounded-lg transition bg-brand-600 text-white flex items-center gap-1";
+                }
+            }
+
+            const fields = currentAuditPhase === 'phase1' ? ['task', 'context', 'ref'] : ['eval', 'iter'];
+            fields.forEach(f => {
+                const splitEl = document.getElementById(`diag-split-${f}`);
+                const diffWrapEl = document.getElementById(`diag-diffwrap-${f}`);
+                if (splitEl && diffWrapEl) {
+                    if (mode === 'split') {
+                        splitEl.classList.remove('hidden');
+                        diffWrapEl.classList.add('hidden');
+                    } else {
+                        splitEl.classList.add('hidden');
+                        diffWrapEl.classList.remove('hidden');
+                        updateDiagFieldDiff(f);
+                    }
+                }
+            });
+
+            if (window.FontAwesome && window.FontAwesome.dom) window.FontAwesome.dom.i2svg();
+        }
+
+        function updateDiagFieldDiff(fieldName) {
+            const orig = currentAuditOriginal[fieldName] || '';
+            const editEl = document.getElementById(`diag-edit-${fieldName}`);
+            const curVal = editEl ? editEl.value : '';
+            const diffEl = document.getElementById(`diag-diff-${fieldName}`);
+            if (diffEl) {
+                diffEl.innerHTML = computeWordDiff(orig, curVal);
+            }
+        }
+
+        function onDiagFieldEdited(fieldName) {
+            const editEl = document.getElementById(`diag-edit-${fieldName}`);
+            const statusEl = document.getElementById(`diag-status-${fieldName}`);
+            if (!editEl || !latestDiagnosis || !latestDiagnosis.optimizedPrompt) return;
+
+            const opt = latestDiagnosis.optimizedPrompt;
+            const originalAISuggestion = opt[fieldName] || '';
+            const isChanged = (editEl.value.trim() !== originalAISuggestion.trim());
+
+            if (statusEl) {
+                if (isChanged) {
+                    statusEl.innerText = 'Modificado por ti';
+                    statusEl.className = "text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40";
+                } else {
+                    statusEl.innerText = 'Sugerencia IA';
+                    statusEl.className = "text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40";
+                }
+            }
+
+            updateDiagFieldDiff(fieldName);
+        }
+
+        function resetAIOptimizationProposal() {
+            if (!latestDiagnosis || !latestDiagnosis.optimizedPrompt) return;
+            const opt = latestDiagnosis.optimizedPrompt;
+
+            if (currentAuditPhase === 'phase1') {
+                ['task', 'context', 'ref'].forEach(f => {
+                    const el = document.getElementById(`diag-edit-${f}`);
+                    if (el) el.value = opt[f] || '';
+                    onDiagFieldEdited(f);
+                });
+            } else {
+                ['eval', 'iter'].forEach(f => {
+                    const el = document.getElementById(`diag-edit-${f}`);
+                    if (el) el.value = opt[f] || '';
+                    onDiagFieldEdited(f);
+                });
+            }
+            showToast("Propuesta Restablecida", "Se ha recuperado la sugerencia original de la IA.", "bolt");
+        }
 
         async function runAIDiagnosis(phase = 'phase1') {
             currentAuditPhase = phase;
@@ -2905,6 +3453,14 @@ INSTRUCCIONES DE AUDITORÍA:
                 showToast("Fase de Control Vacía", "Rellena Criterios de Evaluación o Iteración antes de auditar Fases 4-5.", "trash");
                 return;
             }
+
+            currentAuditOriginal = {
+                task,
+                context,
+                ref,
+                eval: evalCriteria,
+                iter
+            };
 
             const btnId = phase === 'phase1' ? 'btn-run-ai-p1' : 'btn-run-ai-p2';
             const btn = document.getElementById(btnId);
@@ -3194,6 +3750,60 @@ Devuelve ÚNICAMENTE el bloque JSON.`;
                     : `<i class="fa-solid fa-bolt"></i> <span>Aplicar Guía de Control Optimizada (E-I)</span>`;
             }
 
+            // Setup fields for preview & diff
+            const p1Container = document.getElementById('diag-p1-fields-container');
+            const p2Container = document.getElementById('diag-p2-fields-container');
+            const countBadge = document.getElementById('diag-preview-count-badge');
+
+            const opt = diag.optimizedPrompt || {};
+
+            if (phase === 'phase1') {
+                if (p1Container) p1Container.classList.remove('hidden');
+                if (p2Container) p2Container.classList.add('hidden');
+                if (countBadge) countBadge.innerText = '3 campos (T-C-R)';
+
+                // Task
+                const origTaskEl = document.getElementById('diag-orig-task');
+                const editTaskEl = document.getElementById('diag-edit-task');
+                if (origTaskEl) origTaskEl.innerText = currentAuditOriginal.task || '(Campo vacío)';
+                if (editTaskEl) editTaskEl.value = opt.task || currentAuditOriginal.task || '';
+
+                // Context
+                const origCtxEl = document.getElementById('diag-orig-context');
+                const editCtxEl = document.getElementById('diag-edit-context');
+                if (origCtxEl) origCtxEl.innerText = currentAuditOriginal.context || '(Campo vacío)';
+                if (editCtxEl) editCtxEl.value = opt.context || currentAuditOriginal.context || '';
+
+                // Ref
+                const origRefEl = document.getElementById('diag-orig-ref');
+                const editRefEl = document.getElementById('diag-edit-ref');
+                if (origRefEl) origRefEl.innerText = currentAuditOriginal.ref || '(Campo vacío)';
+                if (editRefEl) editRefEl.value = opt.ref || currentAuditOriginal.ref || '';
+
+                ['task', 'context', 'ref'].forEach(f => onDiagFieldEdited(f));
+            } else {
+                if (p1Container) p1Container.classList.add('hidden');
+                if (p2Container) p2Container.classList.remove('hidden');
+                if (countBadge) countBadge.innerText = '2 campos (E-I)';
+
+                // Eval
+                const origEvalEl = document.getElementById('diag-orig-eval');
+                const editEvalEl = document.getElementById('diag-edit-eval');
+                if (origEvalEl) origEvalEl.innerText = currentAuditOriginal.eval || '(Campo vacío)';
+                if (editEvalEl) editEvalEl.value = opt.eval || currentAuditOriginal.eval || '';
+
+                // Iter
+                const origIterEl = document.getElementById('diag-orig-iter');
+                const editIterEl = document.getElementById('diag-edit-iter');
+                if (origIterEl) origIterEl.innerText = currentAuditOriginal.iter || '(Campo vacío)';
+                if (editIterEl) editIterEl.value = opt.iter || currentAuditOriginal.iter || '';
+
+                ['eval', 'iter'].forEach(f => onDiagFieldEdited(f));
+            }
+
+            switchDiagModalTab('analysis');
+            setDiagViewMode('split');
+
             const modal = document.getElementById('modal-ai-diagnosis');
             modal.classList.remove('hidden');
             modal.classList.add('flex');
@@ -3208,28 +3818,43 @@ Devuelve ÚNICAMENTE el bloque JSON.`;
         }
 
         function applyAIOptimization() {
-            if (!latestDiagnosis || !latestDiagnosis.optimizedPrompt) return;
-            const opt = latestDiagnosis.optimizedPrompt;
+            if (!latestDiagnosis) return;
 
             if (currentAuditPhase === 'phase1') {
-                if (opt.task) document.getElementById('gen-task').value = opt.task;
-                if (opt.context) document.getElementById('gen-context').value = opt.context;
-                if (opt.ref) document.getElementById('gen-ref').value = opt.ref;
+                const editTaskEl = document.getElementById('diag-edit-task');
+                const editCtxEl = document.getElementById('diag-edit-context');
+                const editRefEl = document.getElementById('diag-edit-ref');
+
+                const taskVal = editTaskEl ? editTaskEl.value : (latestDiagnosis.optimizedPrompt?.task || '');
+                const ctxVal = editCtxEl ? editCtxEl.value : (latestDiagnosis.optimizedPrompt?.context || '');
+                const refVal = editRefEl ? editRefEl.value : (latestDiagnosis.optimizedPrompt?.ref || '');
+
+                if (taskVal !== undefined) document.getElementById('gen-task').value = taskVal;
+                if (ctxVal !== undefined) document.getElementById('gen-context').value = ctxVal;
+                if (refVal !== undefined) document.getElementById('gen-ref').value = refVal;
+
                 if (aiAuditResults.phase1) {
                     aiAuditResults.phase1.score = Math.max(95, aiAuditResults.phase1.score || 95);
                     aiAuditResults.phase1.label = 'Optimizado por IA';
                     aiAuditResults.phase1.tip = 'Versión refinada por IA aplicada con éxito.';
                 }
-                showToast("¡Entrada T-C-R Optimizada!", "Se han aplicado las mejoras a Tarea, Contexto y Referencias.", "bolt");
+                showToast("¡Entrada T-C-R Optimizada!", "Se han aplicado las mejoras revisadas a Tarea, Contexto y Referencias.", "bolt");
             } else {
-                if (opt.eval) document.getElementById('gen-eval').value = opt.eval;
-                if (opt.iter) document.getElementById('gen-iter').value = opt.iter;
+                const editEvalEl = document.getElementById('diag-edit-eval');
+                const editIterEl = document.getElementById('diag-edit-iter');
+
+                const evalVal = editEvalEl ? editEvalEl.value : (latestDiagnosis.optimizedPrompt?.eval || '');
+                const iterVal = editIterEl ? editIterEl.value : (latestDiagnosis.optimizedPrompt?.iter || '');
+
+                if (evalVal !== undefined) document.getElementById('gen-eval').value = evalVal;
+                if (iterVal !== undefined) document.getElementById('gen-iter').value = iterVal;
+
                 if (aiAuditResults.phase2) {
                     aiAuditResults.phase2.score = Math.max(95, aiAuditResults.phase2.score || 95);
                     aiAuditResults.phase2.label = 'Optimizado por IA';
                     aiAuditResults.phase2.tip = 'Guía de control docente refinada por IA aplicada.';
                 }
-                showToast("¡Control Docente E-I Optimizado!", "Se han aplicado las mejoras a Criterios de Evaluación e Iteración.", "bolt");
+                showToast("¡Control Docente E-I Optimizado!", "Se han aplicado las mejoras revisadas a Criterios de Evaluación e Iteración.", "bolt");
             }
 
             buildPrompt();
@@ -3366,6 +3991,9 @@ Devuelve ÚNICAMENTE el bloque JSON.`;
             if (icon === 'bolt') iconHtml = '<i class="fa-solid fa-bolt"></i>';
             if (icon === 'trash') iconHtml = '<i class="fa-solid fa-trash"></i>';
             if (icon === 'shield') iconHtml = '<i class="fa-solid fa-shield-halved"></i>';
+            if (icon === 'sun') iconHtml = '<i class="fa-solid fa-sun text-amber-400"></i>';
+            if (icon === 'moon') iconHtml = '<i class="fa-solid fa-moon text-brand-400"></i>';
+            if (icon === 'wand') iconHtml = '<i class="fa-solid fa-wand-magic-sparkles text-amber-400"></i>';
 
             iconEl.innerHTML = iconHtml;
 
@@ -5255,9 +5883,82 @@ ${ver.iter || '[Prompt de 2ª iteración / Reprompting]'}`;
         }
 
         // =============================================================
-        // 17. INITIALIZATION ON LOAD
+        // 17. THEME CONTROLLER (LIGHT & DARK MODE)
+        // =============================================================
+        function getCurrentTheme() {
+            return document.documentElement.getAttribute('data-theme') || 'dark';
+        }
+
+        function updateThemeUI(theme) {
+            const icon = document.getElementById('theme-toggle-icon');
+            const text = document.getElementById('theme-toggle-text');
+            const btn = document.getElementById('btn-toggle-theme');
+
+            if (theme === 'light') {
+                if (icon) {
+                    icon.className = 'fa-solid fa-sun text-amber-500';
+                }
+                if (text) {
+                    text.textContent = 'Modo Oscuro';
+                }
+                if (btn) {
+                    btn.title = 'Cambiar a Tema Oscuro';
+                }
+            } else {
+                if (icon) {
+                    icon.className = 'fa-solid fa-moon text-brand-400';
+                }
+                if (text) {
+                    text.textContent = 'Modo Claro';
+                }
+                if (btn) {
+                    btn.title = 'Cambiar a Tema Claro';
+                }
+            }
+
+            if (window.FontAwesome && window.FontAwesome.dom) {
+                window.FontAwesome.dom.i2svg();
+            }
+        }
+
+        function setTheme(theme) {
+            const validTheme = theme === 'light' ? 'light' : 'dark';
+            document.documentElement.setAttribute('data-theme', validTheme);
+            if (validTheme === 'light') {
+                document.documentElement.classList.add('light');
+            } else {
+                document.documentElement.classList.remove('light');
+            }
+            try {
+                localStorage.setItem('kit_ia_theme', validTheme);
+            } catch (e) {
+                console.warn("No se pudo guardar la preferencia de tema en localStorage:", e);
+            }
+            updateThemeUI(validTheme);
+        }
+
+        function toggleTheme() {
+            const current = getCurrentTheme();
+            const newTheme = current === 'light' ? 'dark' : 'light';
+            setTheme(newTheme);
+            showToast(
+                newTheme === 'light' ? 'Tema Claro Activado' : 'Tema Oscuro Activado',
+                newTheme === 'light' ? 'Se ha aplicado el tema claro con alto contraste.' : 'Se ha restaurado el tema oscuro original.',
+                newTheme === 'light' ? 'sun' : 'moon'
+            );
+        }
+
+        function initTheme() {
+            const savedTheme = localStorage.getItem('kit_ia_theme') || 'dark';
+            setTheme(savedTheme);
+        }
+
+        // =============================================================
+        // 18. INITIALIZATION ON LOAD
         // =============================================================
         window.onload = function () {
+            updateAppVersionLabels();
+            initTheme();
             renderSlide(0);
             renderFilterPills();
             renderFamilyCards();
@@ -5524,12 +6225,12 @@ ${ver.iter || '[Prompt de 2ª iteración / Reprompting]'}`;
     <div id="modal-ai-diagnosis"
         class="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md hidden items-center justify-center p-4 overflow-y-auto">
         <div
-            class="glass-panel-dark max-w-3xl w-full p-6 sm:p-8 rounded-3xl border border-slate-700 shadow-2xl space-y-6 my-8 max-h-[90vh] overflow-y-auto">
+            class="glass-panel-dark max-w-4xl w-full p-6 sm:p-8 rounded-3xl border border-slate-700 shadow-2xl space-y-5 my-8 max-h-[92vh] overflow-y-auto">
 
             <!-- HEADER -->
             <div class="flex justify-between items-start border-b border-slate-800 pb-4">
                 <div>
-                    <div class="flex items-center gap-2">
+                    <div class="flex flex-wrap items-center gap-2">
                         <span
                             class="text-xs font-mono font-bold uppercase bg-brand-500/20 text-brand-300 border border-brand-500/30 px-3 py-1 rounded-full flex items-center gap-1.5">
                             <i class="fa-solid fa-robot"></i> Auditoría Docente con <span id="diag-model-name">IA</span>
@@ -5542,66 +6243,285 @@ ${ver.iter || '[Prompt de 2ª iteración / Reprompting]'}`;
                         Diagnóstico Pedagógico TCREI</h3>
                 </div>
                 <button onclick="closeAIDiagnosisModal()"
-                    class="text-slate-400 hover:text-white transition p-1 text-xl">
+                    class="text-slate-400 hover:text-white transition p-1 text-xl"
+                    title="Cerrar modal">
                     <i class="fa-solid fa-xmark"></i>
                 </button>
             </div>
 
-            <!-- SCORES BREAKDOWN -->
-            <div class="grid sm:grid-cols-2 gap-4">
-                <div id="diag-card-p1"
-                    class="p-4 rounded-2xl bg-sky-950/40 border border-sky-500/40 space-y-1 transition-all">
-                    <span class="text-xs text-sky-400 font-heading font-bold uppercase flex items-center gap-1.5">
-                        <i class="fa-solid fa-arrow-right-to-bracket"></i> Entrada Estructurada (T-C-R)
-                    </span>
-                    <div class="flex justify-between items-end">
-                        <span id="diag-p1-score" class="text-2xl font-heading font-extrabold text-white">95%</span>
-                        <span class="text-[11px] text-slate-400">Rol, contexto de taller y normativa</span>
+            <!-- TABS NAVIGATION -->
+            <div class="flex border-b border-slate-800 gap-2">
+                <button id="diag-tab-btn-analysis" onclick="switchDiagModalTab('analysis')"
+                    class="px-4 py-2.5 text-xs font-heading font-bold rounded-t-xl transition border-b-2 border-brand-500 text-white bg-slate-800/40 flex items-center gap-2">
+                    <i class="fa-solid fa-chart-pie text-brand-400"></i>
+                    <span>1. Diagnóstico Pedagógico</span>
+                </button>
+                <button id="diag-tab-btn-preview" onclick="switchDiagModalTab('preview')"
+                    class="px-4 py-2.5 text-xs font-heading font-bold rounded-t-xl transition border-b-2 border-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-800/20 flex items-center gap-2">
+                    <i class="fa-solid fa-code-compare text-emerald-400"></i>
+                    <span>2. Revisar & Editar Propuesta Optimizada</span>
+                    <span id="diag-preview-count-badge"
+                        class="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-mono px-2 py-0.5 rounded-full">3 campos</span>
+                </button>
+            </div>
+
+            <!-- TAB 1: DIAGNÓSTICO PEDAGÓGICO -->
+            <div id="diag-tab-content-analysis" class="space-y-5">
+                <!-- SCORES BREAKDOWN -->
+                <div class="grid sm:grid-cols-2 gap-4">
+                    <div id="diag-card-p1"
+                        class="p-4 rounded-2xl bg-sky-950/40 border border-sky-500/40 space-y-1 transition-all">
+                        <span class="text-xs text-sky-400 font-heading font-bold uppercase flex items-center gap-1.5">
+                            <i class="fa-solid fa-arrow-right-to-bracket"></i> Entrada Estructurada (T-C-R)
+                        </span>
+                        <div class="flex justify-between items-end">
+                            <span id="diag-p1-score" class="text-2xl font-heading font-extrabold text-white">95%</span>
+                            <span class="text-[11px] text-slate-400">Rol, contexto de taller y normativa</span>
+                        </div>
+                    </div>
+                    <div id="diag-card-p2"
+                        class="p-4 rounded-2xl bg-amber-950/40 border border-amber-500/40 space-y-1 transition-all">
+                        <span class="text-xs text-amber-400 font-heading font-bold uppercase flex items-center gap-1.5">
+                            <i class="fa-solid fa-arrows-rotate"></i> Control Docente & Iteración (E-I)
+                        </span>
+                        <div class="flex justify-between items-end">
+                            <span id="diag-p2-score" class="text-2xl font-heading font-extrabold text-white">88%</span>
+                            <span class="text-[11px] text-slate-400">Auditoría técnica y contingencias</span>
+                        </div>
                     </div>
                 </div>
-                <div id="diag-card-p2"
-                    class="p-4 rounded-2xl bg-amber-950/40 border border-amber-500/40 space-y-1 transition-all">
-                    <span class="text-xs text-amber-400 font-heading font-bold uppercase flex items-center gap-1.5">
-                        <i class="fa-solid fa-arrows-rotate"></i> Control Docente & Iteración (E-I)
-                    </span>
-                    <div class="flex justify-between items-end">
-                        <span id="diag-p2-score" class="text-2xl font-heading font-extrabold text-white">88%</span>
-                        <span class="text-[11px] text-slate-400">Auditoría técnica y contingencias</span>
+
+                <!-- DIAGNOSTIC 3 CARDS -->
+                <div class="space-y-4 text-xs sm:text-sm">
+                    <!-- FORTALEZAS -->
+                    <div class="p-4 rounded-2xl bg-slate-950 border border-emerald-500/30 space-y-2">
+                        <h4 class="font-heading font-bold text-emerald-400 flex items-center gap-2">
+                            <i class="fa-solid fa-circle-check"></i> Fortalezas Didácticas Detectadas:
+                        </h4>
+                        <ul id="diag-strengths-list" class="list-disc list-inside space-y-1 text-slate-300">
+                            <!-- Filled dynamically -->
+                        </ul>
                     </div>
+
+                    <!-- RIESGOS TÉCNICOS & ALUCINACIONES -->
+                    <div class="p-4 rounded-2xl bg-slate-950 border border-rose-500/30 space-y-2">
+                        <h4 class="font-heading font-bold text-rose-400 flex items-center gap-2">
+                            <i class="fa-solid fa-triangle-exclamation"></i> Riesgos Técnicos y Vulnerabilidades de
+                            Alucinación en FP:
+                        </h4>
+                        <ul id="diag-risks-list" class="list-disc list-inside space-y-1 text-slate-300">
+                            <!-- Filled dynamically -->
+                        </ul>
+                    </div>
+
+                    <!-- SUGERENCIAS DE MEJORA -->
+                    <div class="p-4 rounded-2xl bg-slate-950 border border-amber-500/30 space-y-2">
+                        <h4 class="font-heading font-bold text-amber-400 flex items-center gap-2">
+                            <i class="fa-solid fa-wand-magic-sparkles"></i> Sugerencias de Refinamiento Metodológico:
+                        </h4>
+                        <ul id="diag-improvements-list" class="list-disc list-inside space-y-1 text-slate-300">
+                            <!-- Filled dynamically -->
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- CTA TO TAB 2 -->
+                <div
+                    class="p-4 rounded-2xl bg-gradient-to-r from-emerald-950/40 via-slate-900 to-sky-950/40 border border-emerald-500/30 flex flex-wrap items-center justify-between gap-3">
+                    <div class="flex items-center gap-3">
+                        <div
+                            class="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0 text-base">
+                            <i class="fa-solid fa-wand-magic-sparkles"></i>
+                        </div>
+                        <div>
+                            <p class="text-xs sm:text-sm font-heading font-bold text-white">Propuesta Optimizada Lista para Revisión</p>
+                            <p class="text-[11px] text-slate-400">Compara las diferencias campo a campo y edita el texto antes de aplicarlo.</p>
+                        </div>
+                    </div>
+                    <button onclick="switchDiagModalTab('preview')"
+                        class="text-xs bg-emerald-600 hover:bg-emerald-500 text-white font-heading font-bold px-4 py-2.5 rounded-xl transition flex items-center gap-2 active:scale-95 shadow-lg shadow-emerald-600/20">
+                        <span>Ver y Editar Propuesta</span>
+                        <i class="fa-solid fa-arrow-right"></i>
+                    </button>
                 </div>
             </div>
 
-            <!-- DIAGNOSTIC 3 CARDS -->
-            <div class="space-y-4 text-xs sm:text-sm">
-                <!-- FORTALEZAS -->
-                <div class="p-4 rounded-2xl bg-slate-950 border border-emerald-500/30 space-y-2">
-                    <h4 class="font-heading font-bold text-emerald-400 flex items-center gap-2">
-                        <i class="fa-solid fa-circle-check"></i> Fortalezas Didácticas Detectadas:
-                    </h4>
-                    <ul id="diag-strengths-list" class="list-disc list-inside space-y-1 text-slate-300">
-                        <!-- Filled dynamically -->
-                    </ul>
+            <!-- TAB 2: REVISAR, COMPARAR DIFERENCIAS Y EDITAR PROPUESTA -->
+            <div id="diag-tab-content-preview" class="hidden space-y-4">
+                <!-- TOOLBAR & VIEW CONTROLS -->
+                <div class="flex flex-wrap justify-between items-center gap-2 p-3 bg-slate-900/60 rounded-2xl border border-slate-800">
+                    <div class="flex flex-wrap items-center gap-2">
+                        <span class="text-xs text-slate-300 font-semibold flex items-center gap-1.5">
+                            <i class="fa-solid fa-eye text-emerald-400"></i> Modo de Vista:
+                        </span>
+                        <div class="inline-flex rounded-xl bg-slate-950 p-1 border border-slate-800 text-[11px] font-heading font-bold">
+                            <button id="diag-viewmode-split-btn" onclick="setDiagViewMode('split')"
+                                class="px-3 py-1 rounded-lg transition bg-brand-600 text-white flex items-center gap-1">
+                                <i class="fa-solid fa-table-columns"></i> Paralelo & Edición
+                            </button>
+                            <button id="diag-viewmode-diff-btn" onclick="setDiagViewMode('diff')"
+                                class="px-3 py-1 rounded-lg transition text-slate-400 hover:text-slate-200 flex items-center gap-1">
+                                <i class="fa-solid fa-code-compare"></i> Comparador Diff
+                            </button>
+                        </div>
+                    </div>
+                    <button onclick="resetAIOptimizationProposal()"
+                        class="text-xs bg-slate-950 hover:bg-slate-800 text-slate-300 hover:text-white px-3 py-1.5 rounded-xl border border-slate-800 transition flex items-center gap-1.5 active:scale-95"
+                        title="Restablecer los campos editables a la propuesta original generada por la IA">
+                        <i class="fa-solid fa-arrow-rotate-left text-amber-400"></i>
+                        <span>Restablecer Propuesta IA</span>
+                    </button>
                 </div>
 
-                <!-- RIESGOS TÉCNICOS & ALUCINACIONES -->
-                <div class="p-4 rounded-2xl bg-slate-950 border border-rose-500/30 space-y-2">
-                    <h4 class="font-heading font-bold text-rose-400 flex items-center gap-2">
-                        <i class="fa-solid fa-triangle-exclamation"></i> Riesgos Técnicos y Vulnerabilidades de
-                        Alucinación en FP:
-                    </h4>
-                    <ul id="diag-risks-list" class="list-disc list-inside space-y-1 text-slate-300">
-                        <!-- Filled dynamically -->
-                    </ul>
+                <!-- PHASE 1 FIELDS (T-C-R) -->
+                <div id="diag-p1-fields-container" class="space-y-4">
+                    <!-- TAREA (T) -->
+                    <div class="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-2">
+                        <div class="flex justify-between items-center">
+                            <span class="text-xs font-heading font-bold text-sky-400 flex items-center gap-1.5">
+                                <i class="fa-solid fa-thumbtack text-sky-400"></i> [T] Tarea y Rol Docente
+                            </span>
+                            <span id="diag-status-task" class="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">Sugerencia IA</span>
+                        </div>
+                        <!-- Split View -->
+                        <div id="diag-split-task" class="grid lg:grid-cols-2 gap-3 text-xs">
+                            <div class="space-y-1">
+                                <span class="text-[11px] text-slate-400 font-semibold">Prompt Actual en Diseñador:</span>
+                                <div id="diag-orig-task" class="p-2.5 rounded-xl bg-slate-900/90 border border-slate-800 text-slate-300 font-mono text-xs whitespace-pre-wrap min-h-[80px]"></div>
+                            </div>
+                            <div class="space-y-1">
+                                <span class="text-[11px] text-emerald-400 font-semibold flex items-center gap-1">
+                                    <i class="fa-solid fa-pen-to-square"></i> Propuesta Optimizada (Editable):
+                                </span>
+                                <textarea id="diag-edit-task" oninput="onDiagFieldEdited('task')" rows="3"
+                                    class="w-full bg-slate-900 border border-emerald-500/40 focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400 rounded-xl p-2.5 text-slate-100 font-mono text-xs outline-none resize-y min-h-[80px]"></textarea>
+                            </div>
+                        </div>
+                        <!-- Diff View -->
+                        <div id="diag-diffwrap-task" class="hidden space-y-1">
+                            <span class="text-[11px] text-slate-400 font-semibold">Comparativa de Diferencias:</span>
+                            <div id="diag-diff-task" class="p-3 rounded-xl bg-slate-900/90 border border-slate-800 text-slate-200 text-xs font-mono whitespace-pre-wrap leading-relaxed"></div>
+                        </div>
+                    </div>
+
+                    <!-- CONTEXTO (C) -->
+                    <div class="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-2">
+                        <div class="flex justify-between items-center">
+                            <span class="text-xs font-heading font-bold text-sky-400 flex items-center gap-1.5">
+                                <i class="fa-solid fa-chalkboard-user text-sky-400"></i> [C] Contexto de Aula / Taller
+                            </span>
+                            <span id="diag-status-context" class="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">Sugerencia IA</span>
+                        </div>
+                        <!-- Split View -->
+                        <div id="diag-split-context" class="grid lg:grid-cols-2 gap-3 text-xs">
+                            <div class="space-y-1">
+                                <span class="text-[11px] text-slate-400 font-semibold">Prompt Actual en Diseñador:</span>
+                                <div id="diag-orig-context" class="p-2.5 rounded-xl bg-slate-900/90 border border-slate-800 text-slate-300 font-mono text-xs whitespace-pre-wrap min-h-[80px]"></div>
+                            </div>
+                            <div class="space-y-1">
+                                <span class="text-[11px] text-emerald-400 font-semibold flex items-center gap-1">
+                                    <i class="fa-solid fa-pen-to-square"></i> Propuesta Optimizada (Editable):
+                                </span>
+                                <textarea id="diag-edit-context" oninput="onDiagFieldEdited('context')" rows="3"
+                                    class="w-full bg-slate-900 border border-emerald-500/40 focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400 rounded-xl p-2.5 text-slate-100 font-mono text-xs outline-none resize-y min-h-[80px]"></textarea>
+                            </div>
+                        </div>
+                        <!-- Diff View -->
+                        <div id="diag-diffwrap-context" class="hidden space-y-1">
+                            <span class="text-[11px] text-slate-400 font-semibold">Comparativa de Diferencias:</span>
+                            <div id="diag-diff-context" class="p-3 rounded-xl bg-slate-900/90 border border-slate-800 text-slate-200 text-xs font-mono whitespace-pre-wrap leading-relaxed"></div>
+                        </div>
+                    </div>
+
+                    <!-- REFERENCIAS (R) -->
+                    <div class="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-2">
+                        <div class="flex justify-between items-center">
+                            <span class="text-xs font-heading font-bold text-sky-400 flex items-center gap-1.5">
+                                <i class="fa-solid fa-book-bookmark text-sky-400"></i> [R] Referencias, Normativa & Restricciones
+                            </span>
+                            <span id="diag-status-ref" class="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">Sugerencia IA</span>
+                        </div>
+                        <!-- Split View -->
+                        <div id="diag-split-ref" class="grid lg:grid-cols-2 gap-3 text-xs">
+                            <div class="space-y-1">
+                                <span class="text-[11px] text-slate-400 font-semibold">Prompt Actual en Diseñador:</span>
+                                <div id="diag-orig-ref" class="p-2.5 rounded-xl bg-slate-900/90 border border-slate-800 text-slate-300 font-mono text-xs whitespace-pre-wrap min-h-[80px]"></div>
+                            </div>
+                            <div class="space-y-1">
+                                <span class="text-[11px] text-emerald-400 font-semibold flex items-center gap-1">
+                                    <i class="fa-solid fa-pen-to-square"></i> Propuesta Optimizada (Editable):
+                                </span>
+                                <textarea id="diag-edit-ref" oninput="onDiagFieldEdited('ref')" rows="3"
+                                    class="w-full bg-slate-900 border border-emerald-500/40 focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400 rounded-xl p-2.5 text-slate-100 font-mono text-xs outline-none resize-y min-h-[80px]"></textarea>
+                            </div>
+                        </div>
+                        <!-- Diff View -->
+                        <div id="diag-diffwrap-ref" class="hidden space-y-1">
+                            <span class="text-[11px] text-slate-400 font-semibold">Comparativa de Diferencias:</span>
+                            <div id="diag-diff-ref" class="p-3 rounded-xl bg-slate-900/90 border border-slate-800 text-slate-200 text-xs font-mono whitespace-pre-wrap leading-relaxed"></div>
+                        </div>
+                    </div>
                 </div>
 
-                <!-- SUGERENCIAS DE MEJORA -->
-                <div class="p-4 rounded-2xl bg-slate-950 border border-amber-500/30 space-y-2">
-                    <h4 class="font-heading font-bold text-amber-400 flex items-center gap-2">
-                        <i class="fa-solid fa-wand-magic-sparkles"></i> Sugerencias de Refinamiento Metodológico:
-                    </h4>
-                    <ul id="diag-improvements-list" class="list-disc list-inside space-y-1 text-slate-300">
-                        <!-- Filled dynamically -->
-                    </ul>
+                <!-- PHASE 2 FIELDS (E-I) -->
+                <div id="diag-p2-fields-container" class="space-y-4 hidden">
+                    <!-- EVALUACIÓN (E) -->
+                    <div class="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-2">
+                        <div class="flex justify-between items-center">
+                            <span class="text-xs font-heading font-bold text-amber-400 flex items-center gap-1.5">
+                                <i class="fa-solid fa-clipboard-check text-amber-400"></i> [E] Criterios de Evaluación Crítica del Output
+                            </span>
+                            <span id="diag-status-eval" class="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">Sugerencia IA</span>
+                        </div>
+                        <!-- Split View -->
+                        <div id="diag-split-eval" class="grid lg:grid-cols-2 gap-3 text-xs">
+                            <div class="space-y-1">
+                                <span class="text-[11px] text-slate-400 font-semibold">Prompt Actual en Diseñador:</span>
+                                <div id="diag-orig-eval" class="p-2.5 rounded-xl bg-slate-900/90 border border-slate-800 text-slate-300 font-mono text-xs whitespace-pre-wrap min-h-[80px]"></div>
+                            </div>
+                            <div class="space-y-1">
+                                <span class="text-[11px] text-emerald-400 font-semibold flex items-center gap-1">
+                                    <i class="fa-solid fa-pen-to-square"></i> Propuesta Optimizada (Editable):
+                                </span>
+                                <textarea id="diag-edit-eval" oninput="onDiagFieldEdited('eval')" rows="3"
+                                    class="w-full bg-slate-900 border border-emerald-500/40 focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400 rounded-xl p-2.5 text-slate-100 font-mono text-xs outline-none resize-y min-h-[80px]"></textarea>
+                            </div>
+                        </div>
+                        <!-- Diff View -->
+                        <div id="diag-diffwrap-eval" class="hidden space-y-1">
+                            <span class="text-[11px] text-slate-400 font-semibold">Comparativa de Diferencias:</span>
+                            <div id="diag-diff-eval" class="p-3 rounded-xl bg-slate-900/90 border border-slate-800 text-slate-200 text-xs font-mono whitespace-pre-wrap leading-relaxed"></div>
+                        </div>
+                    </div>
+
+                    <!-- ITERACIÓN (I) -->
+                    <div class="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-2">
+                        <div class="flex justify-between items-center">
+                            <span class="text-xs font-heading font-bold text-amber-400 flex items-center gap-1.5">
+                                <i class="fa-solid fa-arrows-rotate text-amber-400"></i> [I] Guía de Iteración y Reprompting
+                            </span>
+                            <span id="diag-status-iter" class="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">Sugerencia IA</span>
+                        </div>
+                        <!-- Split View -->
+                        <div id="diag-split-iter" class="grid lg:grid-cols-2 gap-3 text-xs">
+                            <div class="space-y-1">
+                                <span class="text-[11px] text-slate-400 font-semibold">Prompt Actual en Diseñador:</span>
+                                <div id="diag-orig-iter" class="p-2.5 rounded-xl bg-slate-900/90 border border-slate-800 text-slate-300 font-mono text-xs whitespace-pre-wrap min-h-[80px]"></div>
+                            </div>
+                            <div class="space-y-1">
+                                <span class="text-[11px] text-emerald-400 font-semibold flex items-center gap-1">
+                                    <i class="fa-solid fa-pen-to-square"></i> Propuesta Optimizada (Editable):
+                                </span>
+                                <textarea id="diag-edit-iter" oninput="onDiagFieldEdited('iter')" rows="3"
+                                    class="w-full bg-slate-900 border border-emerald-500/40 focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400 rounded-xl p-2.5 text-slate-100 font-mono text-xs outline-none resize-y min-h-[80px]"></textarea>
+                            </div>
+                        </div>
+                        <!-- Diff View -->
+                        <div id="diag-diffwrap-iter" class="hidden space-y-1">
+                            <span class="text-[11px] text-slate-400 font-semibold">Comparativa de Diferencias:</span>
+                            <div id="diag-diff-iter" class="p-3 rounded-xl bg-slate-900/90 border border-slate-800 text-slate-200 text-xs font-mono whitespace-pre-wrap leading-relaxed"></div>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -5611,11 +6531,18 @@ ${ver.iter || '[Prompt de 2ª iteración / Reprompting]'}`;
                     class="text-xs text-slate-400 hover:text-white px-4 py-2 rounded-xl transition">
                     Cerrar
                 </button>
-                <button onclick="applyAIOptimization()" id="btn-apply-ai-opt"
-                    class="text-xs bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-heading font-bold px-5 py-2.5 rounded-xl transition shadow-lg shadow-emerald-600/30 flex items-center gap-2 active:scale-95">
-                    <i class="fa-solid fa-bolt"></i>
-                    <span>Aplicar Versión Optimizada en el Diseñador</span>
-                </button>
+                <div class="flex items-center gap-2">
+                    <button id="diag-btn-goto-preview" onclick="switchDiagModalTab('preview')"
+                        class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 font-heading font-bold px-4 py-2.5 rounded-xl transition flex items-center gap-1.5">
+                        <span>Revisar Propuesta</span>
+                        <i class="fa-solid fa-arrow-right"></i>
+                    </button>
+                    <button onclick="applyAIOptimization()" id="btn-apply-ai-opt"
+                        class="text-xs bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-heading font-bold px-5 py-2.5 rounded-xl transition shadow-lg shadow-emerald-600/30 flex items-center gap-2 active:scale-95">
+                        <i class="fa-solid fa-bolt"></i>
+                        <span>Aplicar Versión Optimizada en el Diseñador</span>
+                    </button>
+                </div>
             </div>
 
         </div>
